@@ -1,0 +1,5 @@
+project_name: earth2-sandbox
+data_dir: ./data
+output_dir: ./outputs
+checkpoint_dir: ./checkpoints
+log_level: INFO
