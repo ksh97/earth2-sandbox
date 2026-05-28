@@ -16,7 +16,7 @@
 
 ## Phase 2: Mobile Prototype
 
-- Choose Flutter or React Native/Expo.
+- Use React Native/Expo for the first iOS and Android prototype.
 - Build one screen:
   - Location input
   - Forecast summary
@@ -45,4 +45,3 @@
 - Submit iOS build to App Store Connect.
 - Submit Android build to Google Play Console.
 - Monitor crashes, latency, and forecast errors.
-

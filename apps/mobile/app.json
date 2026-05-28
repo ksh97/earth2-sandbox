@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Earth-2 Weather",
+    "slug": "earth2-weather",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "earth2weather",
+    "ios": {
+      "bundleIdentifier": "com.ksh97.earth2weather",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.ksh97.earth2weather"
+    },
+    "extra": {
+      "apiBaseUrl": "http://10.0.2.2:8000"
+    }
+  }
+}
+
