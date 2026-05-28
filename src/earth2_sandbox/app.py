@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Query
 
 from earth2_sandbox.config import Settings, get_settings
-from earth2_sandbox.services.forecast import MockForecastService
+from earth2_sandbox.services.forecast import ForecastSummary, MockForecastService
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -22,12 +22,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "mock_forecast": settings.enable_mock_forecast,
         }
 
-    @app.get("/api/v1/forecast/sample")
+    @app.get("/api/v1/forecast/sample", response_model=ForecastSummary)
     async def sample_forecast(
         latitude: float = Query(..., ge=-90, le=90),
         longitude: float = Query(..., ge=-180, le=180),
-    ):
+    ) -> ForecastSummary:
         return await forecast_service.get_point_forecast(latitude=latitude, longitude=longitude)
 
     return app
-

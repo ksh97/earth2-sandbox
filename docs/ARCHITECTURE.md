@@ -19,7 +19,7 @@ Mobile app
 
 ### Mobile App
 
-Recommended direction: Flutter or React Native/Expo.
+Current direction: React Native with Expo.
 
 Responsibilities:
 
@@ -27,6 +27,8 @@ Responsibilities:
 - Show current forecast summaries.
 - Show map or chart visualizations.
 - Receive push notifications later.
+
+Current prototype path: `apps/mobile`.
 
 ### Backend API
 
@@ -71,6 +73,7 @@ Early stage:
 - FastAPI backend on a small cloud server.
 - Mock forecast data.
 - Mobile app connected to backend.
+- Expo app running on iOS Simulator, Android Emulator, or Expo Go.
 
 Model integration stage:
 
@@ -85,4 +88,3 @@ Production stage:
 - Monitoring.
 - Forecast cache invalidation.
 - Store release pipelines for iOS and Android.
-

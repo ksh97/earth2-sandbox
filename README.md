@@ -10,6 +10,7 @@ NVIDIA Earth-2 / FourCastNet 기반 AI 기상예보 애플리케이션을 만들
 - 설정 파일과 환경변수 예시
 - FourCastNet NIM 연동을 위한 클라이언트 자리
 - 모바일 앱 개발 전에 사용할 mock forecast API
+- Expo 기반 iOS/Android 모바일 앱 prototype
 - 초보자용 로드맵과 아키텍처 문서
 
 ## 프로젝트 구조
@@ -21,6 +22,11 @@ earth2-sandbox/
 ├─ .env.example
 ├─ configs/
 │  └─ config.example.yaml
+├─ apps/
+│  └─ mobile/
+│     ├─ App.tsx
+│     ├─ package.json
+│     └─ src/
 ├─ docs/
 │  ├─ ARCHITECTURE.md
 │  └─ ROADMAP.md
@@ -57,6 +63,17 @@ python -m uvicorn earth2_sandbox.main:app --reload
 - 예시 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
 
+## 모바일 앱 시작
+
+```powershell
+cd apps/mobile
+npm install
+Copy-Item .env.example .env
+npm run start
+```
+
+Android Emulator에서 로컬 백엔드에 접속할 때는 `http://10.0.2.2:8000`을 사용합니다. iOS Simulator에서는 보통 `http://127.0.0.1:8000`을 사용할 수 있습니다.
+
 ## 개발 원칙
 
 - 진짜 API 키는 GitHub에 올리지 않습니다.
@@ -68,4 +85,3 @@ python -m uvicorn earth2_sandbox.main:app --reload
 
 - NVIDIA FourCastNet NIM 문서: https://docs.nvidia.com/nim/earth-2/fourcastnet/latest/
 - NVIDIA Earth-2 Weather Analytics Blueprint: https://github.com/NVIDIA-Omniverse-blueprints/earth2-weather-analytics
-
