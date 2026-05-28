@@ -1,10 +1,13 @@
 # data
 
-이 폴더는 로컬 데이터 경로입니다.
+Local weather data belongs here.
 
-주의:
-- 원본 기상자료
-- 중간 산출물
-- 대용량 파일
+Do not commit:
 
-위 항목들은 GitHub에 올리지 않습니다.
+- Original weather datasets
+- Intermediate model arrays
+- Forecast output archives
+- Large generated files
+
+Keep only small documentation files in this folder.
+
