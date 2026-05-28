@@ -1,5 +1,14 @@
 project_name: earth2-sandbox
-data_dir: ./data
-output_dir: ./outputs
-checkpoint_dir: ./checkpoints
+environment: local
 log_level: INFO
+
+paths:
+  data_dir: ./data
+  output_dir: ./outputs
+  checkpoint_dir: ./checkpoints
+
+fourcastnet:
+  nim_base_url: http://localhost:8000
+  request_timeout_seconds: 300
+  enable_mock_forecast: true
+
