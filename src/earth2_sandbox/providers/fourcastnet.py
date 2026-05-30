@@ -1,5 +1,9 @@
 from earth2_sandbox.clients.nim import FourCastNetInferenceError, FourCastNetNimClient
-from earth2_sandbox.postprocessing import FourCastNetPostProcessor
+from earth2_sandbox.postprocessing import (
+    FOURCASTNET_POINT_VARIABLES,
+    FourCastNetPostProcessingError,
+    FourCastNetPostProcessor,
+)
 from earth2_sandbox.providers.base import ForecastProviderUnavailableError
 from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
 from earth2_sandbox.schemas.fourcastnet import (
@@ -21,26 +25,48 @@ class FourCastNetForecastProvider:
 
     async def get_status(self) -> ForecastProviderStatus:
         status = await self.client.get_readiness_status()
+        supports_point_forecast = status.mode == "hosted" and status.ready
+        detail_suffix = (
+            "Hosted point forecast sampling is available."
+            if supports_point_forecast
+            else "Point forecast sampling requires the hosted API path and a configured API key."
+        )
         return ForecastProviderStatus(
             provider="fourcastnet",
             mode=status.mode,
             configured=status.configured,
             ready=status.ready,
-            supports_point_forecast=False,
+            supports_point_forecast=supports_point_forecast,
             endpoint=status.endpoint,
-            detail=(
-                f"{status.detail} Point forecast post-processing is not implemented yet."
-            ).strip(),
+            detail=f"{status.detail} {detail_suffix}".strip(),
         )
 
     async def get_point_forecast(self, latitude: float, longitude: float) -> ForecastSummary:
         status = await self.get_status()
-        detail = (
-            status.detail
-            if status.ready
-            else "FourCastNet provider is not ready. Use mock provider until NIM is configured."
+        if not status.supports_point_forecast:
+            detail = (
+                status.detail
+                if status.ready
+                else "FourCastNet provider is not ready. Use mock provider until NIM is configured."
+            )
+            raise ForecastProviderUnavailableError(detail)
+
+        request = FourCastNetHostedInferenceRequest(
+            variables=list(FOURCASTNET_POINT_VARIABLES),
+            simulation_length=4,
+            ensemble_size=1,
+            accept="application/x-tar",
         )
-        raise ForecastProviderUnavailableError(detail)
+        try:
+            result = await self.client.run_hosted_inference(request)
+            return self.post_processor.build_forecast_summary_from_hosted_result(
+                result=result,
+                request=request,
+                latitude=latitude,
+                longitude=longitude,
+            )
+        except (FourCastNetInferenceError, FourCastNetPostProcessingError) as error:
+            raise ForecastProviderUnavailableError(str(error)) from error
 
     async def run_hosted_inference(
         self,
