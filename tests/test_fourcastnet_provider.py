@@ -4,7 +4,7 @@ import httpx
 
 from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
-from earth2_sandbox.services.forecast import FourCastNetForecastService, build_forecast_provider
+from earth2_sandbox.providers import FourCastNetForecastProvider, build_forecast_provider
 
 
 def test_self_hosted_fourcastnet_readiness_uses_ready_endpoint() -> None:
@@ -73,7 +73,7 @@ def test_build_forecast_provider_can_select_fourcastnet_hosted_mode() -> None:
     provider = build_forecast_provider(settings)
     status = asyncio.run(provider.get_status())
 
-    assert isinstance(provider, FourCastNetForecastService)
+    assert isinstance(provider, FourCastNetForecastProvider)
     assert status.provider == "fourcastnet"
     assert status.mode == "hosted"
     assert status.ready is True

@@ -42,6 +42,15 @@ Responsibilities:
 - Cache forecasts to avoid repeated expensive inference.
 - Provide stable API contracts for iOS and Android.
 
+Current backend layout:
+
+- `schemas/forecast.py`: API response models shared by routes and providers
+- `providers/base.py`: forecast provider protocol and provider-level errors
+- `providers/mock.py`: deterministic point forecast provider for app development
+- `providers/fourcastnet.py`: FourCastNet readiness boundary for future inference
+- `providers/factory.py`: environment-driven provider selection
+- `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
+
 ### FourCastNet NIM
 
 FourCastNet NIM exposes an HTTP API for inference and health checks. The NVIDIA documentation describes `/v1/infer`, `/v1/health/live`, `/v1/health/ready`, and `/v1/metrics`.

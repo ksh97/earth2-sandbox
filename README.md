@@ -37,9 +37,18 @@ earth2-sandbox/
 │     ├─ main.py
 │     ├─ clients/
 │     │  └─ nim.py
+│     ├─ providers/
+│     │  ├─ base.py
+│     │  ├─ factory.py
+│     │  ├─ fourcastnet.py
+│     │  └─ mock.py
+│     ├─ schemas/
+│     │  └─ forecast.py
 │     └─ services/
 │        └─ forecast.py
 ├─ tests/
+│  ├─ test_api_contract.py
+│  ├─ test_fourcastnet_provider.py
 │  └─ test_mock_forecast.py
 ├─ notebooks/
 │  └─ README.md

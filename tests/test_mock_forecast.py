@@ -1,10 +1,10 @@
 import asyncio
 
-from earth2_sandbox.services.forecast import MockForecastService
+from earth2_sandbox.providers.mock import MockForecastProvider
 
 
 def test_mock_forecast_returns_mobile_friendly_summary() -> None:
-    service = MockForecastService()
+    service = MockForecastProvider()
 
     forecast = asyncio.run(
         service.get_point_forecast(latitude=37.5665, longitude=126.9780)

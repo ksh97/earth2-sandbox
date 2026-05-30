@@ -2,12 +2,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from earth2_sandbox.config import Settings, get_settings
-from earth2_sandbox.services.forecast import (
-    ForecastProviderStatus,
+from earth2_sandbox.providers import (
     ForecastProviderUnavailableError,
-    ForecastSummary,
     build_forecast_provider,
 )
+from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
 
 LOCAL_DEV_ORIGINS = [
     "http://localhost:8081",

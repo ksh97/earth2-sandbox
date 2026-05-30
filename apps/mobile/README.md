@@ -32,3 +32,11 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - Mock backend API integration.
 - Loading and error states.
 
+## Code Layout
+
+- `App.tsx`: Expo entry point.
+- `src/screens/ForecastScreen.tsx`: top-level forecast screen composition.
+- `src/hooks/useForecast.ts`: forecast state, location selection, and backend requests.
+- `src/components/`: reusable forecast UI panels.
+- `src/api/forecast.ts`: backend forecast API types and request helper.
+
