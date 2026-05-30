@@ -8,8 +8,8 @@ NVIDIA Earth-2 / FourCastNet 기반 AI 기상예보 애플리케이션을 만들
 
 - Python 백엔드 skeleton
 - 설정 파일과 환경변수 예시
-- FourCastNet NIM 연동을 위한 클라이언트 자리
-- 모바일 앱 개발 전에 사용할 mock forecast API
+- mock/FourCastNet 전환을 위한 forecast provider 구조
+- 모바일 앱 개발 전에 사용할 mock forecast API와 provider status API
 - Expo 기반 iOS/Android 모바일 앱 prototype
 - 초보자용 로드맵과 아키텍처 문서
 
@@ -60,6 +60,7 @@ python -m uvicorn earth2_sandbox.main:app --reload
 서버가 켜지면 다음 주소를 확인합니다.
 
 - API 상태: http://127.0.0.1:8000/health
+- 예보 provider 상태: http://127.0.0.1:8000/api/v1/forecast/provider/status
 - 예시 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
 
@@ -80,6 +81,7 @@ Android Emulator에서 로컬 백엔드에 접속할 때는 `http://10.0.2.2:800
 - 대용량 기상 데이터, 모델 체크포인트, 산출물은 GitHub에 올리지 않습니다.
 - 처음에는 mock API로 모바일 화면과 API 계약을 검증합니다.
 - FourCastNet NIM 연동은 백엔드에서 숨기고, 앱은 단순한 JSON API만 호출하게 만듭니다.
+- `.env`에서 `EARTH2_FORECAST_PROVIDER=mock` 또는 `fourcastnet`으로 backend provider를 전환합니다.
 
 ## 참고 문서
 

@@ -1,7 +1,11 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ForecastProviderName = Literal["mock", "fourcastnet"]
+FourCastNetEndpointMode = Literal["self_hosted", "hosted"]
 
 
 class Settings(BaseSettings):
@@ -19,7 +23,10 @@ class Settings(BaseSettings):
     output_dir: str = "./outputs"
     checkpoint_dir: str = "./checkpoints"
 
+    forecast_provider: ForecastProviderName = "mock"
+    fourcastnet_endpoint_mode: FourCastNetEndpointMode = "self_hosted"
     nim_base_url: str = "http://localhost:8000"
+    fourcastnet_hosted_url: str = "https://climate.api.nvidia.com/v1/nvidia/fourcastnet"
     nvidia_api_key: SecretStr | None = Field(default=None)
     enable_mock_forecast: bool = True
     request_timeout_seconds: int = 300

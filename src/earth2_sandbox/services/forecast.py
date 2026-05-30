@@ -1,8 +1,11 @@
 from datetime import UTC, datetime, timedelta
 from math import cos, radians, sin
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
+
+from earth2_sandbox.clients.nim import FourCastNetNimClient
+from earth2_sandbox.config import Settings
 
 
 class ForecastMetric(BaseModel):
@@ -57,8 +60,38 @@ class ForecastSummary(BaseModel):
     signals: list[ForecastSignal]
 
 
+class ForecastProviderStatus(BaseModel):
+    provider: Literal["mock", "fourcastnet"]
+    mode: str
+    configured: bool
+    ready: bool
+    supports_point_forecast: bool
+    endpoint: str | None = None
+    detail: str
+
+
+class ForecastProviderUnavailableError(RuntimeError):
+    """Raised when the selected forecast provider cannot serve a point forecast yet."""
+
+
+class ForecastProvider(Protocol):
+    async def get_point_forecast(self, latitude: float, longitude: float) -> ForecastSummary: ...
+
+    async def get_status(self) -> ForecastProviderStatus: ...
+
+
 class MockForecastService:
     """Deterministic forecast values for API and mobile UI development."""
+
+    async def get_status(self) -> ForecastProviderStatus:
+        return ForecastProviderStatus(
+            provider="mock",
+            mode="deterministic",
+            configured=True,
+            ready=True,
+            supports_point_forecast=True,
+            detail="Deterministic mock forecast provider is ready.",
+        )
 
     async def get_point_forecast(self, latitude: float, longitude: float) -> ForecastSummary:
         latitude_factor = sin(radians(latitude))
@@ -227,4 +260,53 @@ class MockForecastService:
             ),
         ]
         return signals
+
+
+class FourCastNetForecastService:
+    """FourCastNet provider boundary for readiness checks and future inference wiring."""
+
+    def __init__(self, client: FourCastNetNimClient):
+        self.client = client
+
+    async def get_status(self) -> ForecastProviderStatus:
+        status = await self.client.get_readiness_status()
+        return ForecastProviderStatus(
+            provider="fourcastnet",
+            mode=status.mode,
+            configured=status.configured,
+            ready=status.ready,
+            supports_point_forecast=False,
+            endpoint=status.endpoint,
+            detail=(
+                f"{status.detail} Point forecast post-processing is not implemented yet."
+            ).strip(),
+        )
+
+    async def get_point_forecast(self, latitude: float, longitude: float) -> ForecastSummary:
+        status = await self.get_status()
+        detail = (
+            status.detail
+            if status.ready
+            else "FourCastNet provider is not ready. Use mock provider until NIM is configured."
+        )
+        raise ForecastProviderUnavailableError(detail)
+
+
+def build_forecast_provider(settings: Settings) -> ForecastProvider:
+    if settings.forecast_provider == "mock":
+        return MockForecastService()
+
+    api_key = settings.nvidia_api_key.get_secret_value() if settings.nvidia_api_key else None
+    base_url = (
+        settings.fourcastnet_hosted_url
+        if settings.fourcastnet_endpoint_mode == "hosted"
+        else settings.nim_base_url
+    )
+    client = FourCastNetNimClient(
+        base_url=base_url,
+        timeout_seconds=settings.request_timeout_seconds,
+        mode=settings.fourcastnet_endpoint_mode,
+        api_key=api_key,
+    )
+    return FourCastNetForecastService(client=client)
 
