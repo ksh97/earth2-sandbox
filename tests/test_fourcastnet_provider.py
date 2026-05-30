@@ -108,6 +108,32 @@ def test_hosted_fourcastnet_inference_posts_documented_payload() -> None:
     assert result.json_preview == {"request_id": "test-request", "status": "ok"}
 
 
+def test_hosted_fourcastnet_inference_captures_large_asset_marker() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"message": "Large asset written"},
+            headers={
+                "content-type": "application/json",
+                "nvcf-reqid": "test-request-id",
+                "nvcf-status": "fulfilled",
+            },
+        )
+
+    client = FourCastNetNimClient(
+        base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+        mode="hosted",
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = asyncio.run(client.run_hosted_inference(FourCastNetHostedInferenceRequest()))
+
+    assert result.large_asset_message == "Large asset written"
+    assert result.nvcf_request_id == "test-request-id"
+    assert result.nvcf_status == "fulfilled"
+
+
 def test_hosted_fourcastnet_inference_requires_api_key() -> None:
     client = FourCastNetNimClient(
         base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",

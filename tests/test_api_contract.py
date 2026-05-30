@@ -1,8 +1,17 @@
 from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
+from earth2_sandbox.config import Settings
 
-client = TestClient(create_app())
+client = TestClient(
+    create_app(
+        settings=Settings(
+            forecast_provider="mock",
+            fourcastnet_endpoint_mode="self_hosted",
+            nvidia_api_key=None,
+        )
+    )
+)
 
 
 def test_health_contract() -> None:
