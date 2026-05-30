@@ -172,3 +172,7 @@ def test_hosted_inference_route_returns_adapter_result() -> None:
     assert body["byte_length"] == len(b"fake tar bytes")
     assert body["request_payload"]["variables"] == "w10m"
     assert body["request_payload"]["simulation_length"] == 1
+    assert body["post_processing"]["mobile_summary_ready"] is False
+    assert body["post_processing"]["detected_format"] == "tar"
+    assert "Decode returned tar archive" in body["post_processing"]["required_steps"][1]
+    assert "Raw model output is intentionally not exposed" in body["post_processing"]["notes"][2]

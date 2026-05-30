@@ -1,4 +1,5 @@
 from earth2_sandbox.clients.nim import FourCastNetInferenceError, FourCastNetNimClient
+from earth2_sandbox.postprocessing import FourCastNetPostProcessor
 from earth2_sandbox.providers.base import ForecastProviderUnavailableError
 from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
 from earth2_sandbox.schemas.fourcastnet import (
@@ -10,8 +11,13 @@ from earth2_sandbox.schemas.fourcastnet import (
 class FourCastNetForecastProvider:
     """FourCastNet provider boundary for readiness checks and future inference wiring."""
 
-    def __init__(self, client: FourCastNetNimClient):
+    def __init__(
+        self,
+        client: FourCastNetNimClient,
+        post_processor: FourCastNetPostProcessor | None = None,
+    ):
         self.client = client
+        self.post_processor = post_processor or FourCastNetPostProcessor()
 
     async def get_status(self) -> ForecastProviderStatus:
         status = await self.client.get_readiness_status()
@@ -46,9 +52,15 @@ class FourCastNetForecastProvider:
             )
 
         try:
-            return await self.client.run_hosted_inference(request)
+            result = await self.client.run_hosted_inference(request)
         except FourCastNetInferenceError as error:
             raise ForecastProviderUnavailableError(str(error)) from error
+
+        return result.model_copy(
+            update={
+                "post_processing": self.post_processor.describe_hosted_result(result),
+            }
+        )
 
 
 FourCastNetForecastService = FourCastNetForecastProvider
