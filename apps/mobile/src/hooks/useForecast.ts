@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { fetchSampleForecast, ForecastSummary } from "../api/forecast";
+import {
+  fetchForecastProviderStatus,
+  fetchSampleForecast,
+  ForecastProviderStatus,
+  ForecastSummary,
+} from "../api/forecast";
 import { formatDateTime } from "../utils/forecastFormat";
 import { LocationPreset, locationPresets } from "../locations";
 
@@ -16,8 +21,10 @@ export function useForecast() {
   const [longitude, setLongitude] = useState(initialLongitude);
   const [selectedPreset, setSelectedPreset] = useState<LocationPreset | null>(initialPreset);
   const [forecast, setForecast] = useState<ForecastSummary | null>(null);
+  const [providerStatus, setProviderStatus] = useState<ForecastProviderStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [providerErrorMessage, setProviderErrorMessage] = useState<string | null>(null);
   const [screenMode, setScreenMode] = useState<ScreenMode>("overview");
   const [selectedLeadHour, setSelectedLeadHour] = useState<number | null>(null);
 
@@ -50,7 +57,20 @@ export function useForecast() {
     );
   }, [selectedLeadHour, timeline]);
 
-  const syncState = errorMessage ? "Offline" : isLoading ? "Syncing" : "Ready";
+  const syncState =
+    errorMessage || providerErrorMessage ? "Offline" : isLoading ? "Syncing" : "Ready";
+
+  async function refreshProviderStatus() {
+    try {
+      const nextStatus = await fetchForecastProviderStatus();
+      setProviderStatus(nextStatus);
+      setProviderErrorMessage(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Provider status request failed.";
+      setProviderStatus(null);
+      setProviderErrorMessage(message);
+    }
+  }
 
   async function refreshForecast(nextCoordinates?: { latitude: string; longitude: string }) {
     const requestLatitude = nextCoordinates?.latitude ?? latitude;
@@ -102,6 +122,7 @@ export function useForecast() {
   }
 
   useEffect(() => {
+    void refreshProviderStatus();
     void refreshForecast();
   }, []);
 
@@ -114,7 +135,10 @@ export function useForecast() {
     isLoading,
     latitude,
     longitude,
+    providerErrorMessage,
+    providerStatus,
     refreshForecast,
+    refreshProviderStatus,
     screenMode,
     selectedPreset,
     selectedTimelineStep,
