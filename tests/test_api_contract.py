@@ -17,6 +17,13 @@ def test_health_contract() -> None:
     }
 
 
+def test_health_allows_local_mobile_preview_origin() -> None:
+    response = client.get("/health", headers={"Origin": "http://localhost:8081"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:8081"
+
+
 def test_sample_forecast_contract() -> None:
     response = client.get(
         "/api/v1/forecast/sample",

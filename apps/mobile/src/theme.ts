@@ -1,5 +1,6 @@
 export const colors = {
   accent: "#2A9D8F",
+  accentSoft: "#DDF3EE",
   background: "#F5F7FA",
   badge: "#E9C46A",
   border: "#D8DEE8",
@@ -7,6 +8,9 @@ export const colors = {
   errorSurface: "#FFF1F0",
   input: "#FBFCFE",
   muted: "#5F6F89",
+  hero: "#1F3A5F",
+  heroBorder: "#31557F",
+  heroMuted: "#C9D8EA",
   surface: "#FFFFFF",
   text: "#14213D",
 };
