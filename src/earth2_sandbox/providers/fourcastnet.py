@@ -56,10 +56,17 @@ class FourCastNetForecastProvider:
         except FourCastNetInferenceError as error:
             raise ForecastProviderUnavailableError(str(error)) from error
 
-        return result.model_copy(
+        decoded_tar = self.post_processor.decode_hosted_result(result)
+        result_without_raw = result.model_copy(
             update={
-                "post_processing": self.post_processor.describe_hosted_result(result),
+                "decoded_tar": decoded_tar,
+                "raw_content": None,
             }
+        )
+        return result_without_raw.model_copy(
+            update={
+                "post_processing": self.post_processor.describe_hosted_result(result_without_raw),
+            },
         )
 
 

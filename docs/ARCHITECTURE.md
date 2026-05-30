@@ -50,6 +50,7 @@ Current backend layout:
 - `providers/fourcastnet.py`: FourCastNet readiness boundary for future inference
 - `providers/factory.py`: environment-driven provider selection
 - `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
+- `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
 
 ### FourCastNet NIM
 
@@ -71,6 +72,12 @@ of streaming large tar payloads directly to the mobile app. A post-processing re
 attached to each hosted inference result so raw output decoding remains a backend-only
 concern until it can produce the stable `ForecastSummary` contract.
 
+When the hosted endpoint returns `application/x-tar`, the backend now decodes NumPy
+members that follow NVIDIA's `000_000.npy`, `006_000.npy`, and later lead-time naming
+pattern. The API response exposes only safe metadata such as lead times, batch indices,
+array shape, dtype, and finite min/max/mean values; the raw array bytes remain excluded
+from the JSON response.
+
 ## First API Contract
 
 `GET /health`
@@ -86,8 +93,8 @@ Returns the selected forecast provider, endpoint mode, readiness, and whether po
 Runs a hosted NVIDIA FourCastNet inference request when `EARTH2_FORECAST_PROVIDER=fourcastnet`,
 `EARTH2_FOURCASTNET_ENDPOINT_MODE=hosted`, and `EARTH2_NVIDIA_API_KEY` are configured. This is
 an adapter smoke-test endpoint, not yet the mobile point-forecast endpoint. The response includes
-a post-processing report with the remaining steps required to turn raw FourCastNet output into
-mobile forecast summaries.
+decoded tar metadata and a post-processing report with the remaining steps required to turn raw
+FourCastNet output into mobile forecast summaries.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 
