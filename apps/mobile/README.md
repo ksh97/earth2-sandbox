@@ -16,6 +16,12 @@ Copy-Item .env.example .env
 npm run start
 ```
 
+For browser preview:
+
+```powershell
+npm run web
+```
+
 For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iOS Simulator, use `http://127.0.0.1:8000`. For a physical phone, set `EXPO_PUBLIC_API_BASE_URL` to the LAN address of the backend machine.
 
 ## Current Scope
