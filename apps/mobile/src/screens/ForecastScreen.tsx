@@ -15,6 +15,7 @@ import { ForecastOverview } from "../components/ForecastOverview";
 import { ForecastStatusPanel } from "../components/ForecastStatusPanel";
 import { LocationPanel } from "../components/LocationPanel";
 import { ModeSwitch } from "../components/ModeSwitch";
+import { ProviderStatusPanel } from "../components/ProviderStatusPanel";
 import { useForecast } from "../hooks/useForecast";
 import { colors, spacing } from "../theme";
 
@@ -28,7 +29,10 @@ export function ForecastScreen() {
     isLoading,
     latitude,
     longitude,
+    providerErrorMessage,
+    providerStatus,
     refreshForecast,
+    refreshProviderStatus,
     screenMode,
     selectedPreset,
     selectedTimelineStep,
@@ -52,8 +56,13 @@ export function ForecastScreen() {
           <ForecastHero
             latitude={latitude}
             longitude={longitude}
-            providerLabel={forecast?.provider ?? "Mock"}
+            providerLabel={providerStatus?.provider ?? forecast?.provider ?? "Mock"}
             selectedPreset={selectedPreset}
+          />
+          <ProviderStatusPanel
+            errorMessage={providerErrorMessage}
+            onRefresh={() => void refreshProviderStatus()}
+            status={providerStatus}
           />
           <LocationPanel
             isLoading={isLoading}
