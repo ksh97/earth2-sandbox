@@ -85,6 +85,8 @@ EARTH2_NVIDIA_API_KEY=your_nvidia_api_key
 
 - Hosted FourCastNet inference: http://127.0.0.1:8000/api/v1/forecast/fourcastnet/hosted/infer
 
+응답에는 raw model output 자체가 아니라 byte length, sha256 digest, content type, post-processing report가 포함됩니다. 실제 모바일 예보로 쓰려면 tar/NumPy 결과를 백엔드에서 디코딩하고 기존 `ForecastSummary` 계약으로 변환하는 단계가 추가로 필요합니다.
+
 ## 모바일 앱 시작
 
 ```powershell

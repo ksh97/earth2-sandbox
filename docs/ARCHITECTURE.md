@@ -67,7 +67,9 @@ The FourCastNet provider intentionally reports readiness separately from point-f
 The first real inference path targets the hosted NVIDIA API because it avoids local GPU,
 Docker, and ERA5 input preparation while the backend adapter contract is being tested.
 The adapter posts documented hosted API parameters and returns response metadata instead
-of streaming large tar payloads directly to the mobile app.
+of streaming large tar payloads directly to the mobile app. A post-processing report is
+attached to each hosted inference result so raw output decoding remains a backend-only
+concern until it can produce the stable `ForecastSummary` contract.
 
 ## First API Contract
 
@@ -83,7 +85,9 @@ Returns the selected forecast provider, endpoint mode, readiness, and whether po
 
 Runs a hosted NVIDIA FourCastNet inference request when `EARTH2_FORECAST_PROVIDER=fourcastnet`,
 `EARTH2_FOURCASTNET_ENDPOINT_MODE=hosted`, and `EARTH2_NVIDIA_API_KEY` are configured. This is
-an adapter smoke-test endpoint, not yet the mobile point-forecast endpoint.
+an adapter smoke-test endpoint, not yet the mobile point-forecast endpoint. The response includes
+a post-processing report with the remaining steps required to turn raw FourCastNet output into
+mobile forecast summaries.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 

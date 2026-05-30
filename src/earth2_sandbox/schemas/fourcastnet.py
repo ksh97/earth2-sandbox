@@ -26,3 +26,11 @@ class FourCastNetHostedInferenceResult(BaseModel):
     sha256: str
     request_payload: dict[str, int | float | str]
     json_preview: Any | None = None
+    post_processing: "FourCastNetPostProcessingReport | None" = None
+
+
+class FourCastNetPostProcessingReport(BaseModel):
+    mobile_summary_ready: bool
+    detected_format: Literal["tar", "json", "unknown"]
+    required_steps: list[str]
+    notes: list[str]
