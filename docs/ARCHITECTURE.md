@@ -78,6 +78,13 @@ pattern. The API response exposes only safe metadata such as lead times, batch i
 array shape, dtype, and finite min/max/mean values; the raw array bytes remain excluded
 from the JSON response.
 
+The point forecast sampler uses the requested variable order to read `w10m`, `t2m`,
+`msl`, and `tcwv` from 4D `(batch, variable, latitude, longitude)` or 5D
+`(batch, time, variable, latitude, longitude)` arrays. It maps user coordinates to the
+nearest global latitude/longitude grid cell, converts Kelvin to Celsius and Pa to hPa,
+and derives a lightweight moisture/rain-risk proxy until richer precipitation variables
+or calibrated post-processing are available.
+
 ## First API Contract
 
 `GET /health`
@@ -104,6 +111,11 @@ Returns a mobile-friendly forecast payload for UI prototyping:
 - model metadata and forecast window information
 - deterministic timeline steps for the detail screen
 - signal levels for precipitation, wind, and model confidence
+
+When `EARTH2_FORECAST_PROVIDER=fourcastnet`, `EARTH2_FOURCASTNET_ENDPOINT_MODE=hosted`,
+and `EARTH2_NVIDIA_API_KEY` are configured, this same endpoint requests hosted
+FourCastNet tar output, samples the nearest grid cell for the requested coordinates,
+and returns the stable `ForecastSummary` shape used by the mobile app.
 
 ## Later API Contracts
 

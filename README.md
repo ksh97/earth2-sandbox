@@ -91,6 +91,12 @@ EARTH2_NVIDIA_API_KEY=your_nvidia_api_key
 
 응답에는 raw model output 자체가 아니라 byte length, sha256 digest, content type, tar/NumPy metadata, post-processing report가 포함됩니다. 실제 모바일 예보로 쓰려면 디코딩된 lead time/batch 배열 metadata를 바탕으로 특정 좌표 값을 샘플링하고 기존 `ForecastSummary` 계약으로 변환하는 단계가 추가로 필요합니다.
 
+`EARTH2_FORECAST_PROVIDER=fourcastnet`와 hosted API key가 설정되어 있으면 기존 sample forecast 엔드포인트도 hosted FourCastNet tar 결과를 호출한 뒤 특정 위도/경도에 가장 가까운 격자점을 샘플링하여 `ForecastSummary` 형태로 반환합니다.
+
+- Point forecast sample: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
+
+실제 NVIDIA API key는 `.env`에만 저장하고 GitHub에는 올리지 않습니다. 샘플 tar 응답 파일을 받은 경우에도 `data/` 아래 로컬 파일로만 보관하고 커밋하지 않습니다.
+
 ## 모바일 앱 시작
 
 ```powershell

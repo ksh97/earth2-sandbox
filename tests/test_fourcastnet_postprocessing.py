@@ -1,9 +1,11 @@
 import tarfile
+from datetime import UTC, datetime
 from io import BytesIO
 
 import numpy as np
 
 from earth2_sandbox.postprocessing import FourCastNetPostProcessor
+from earth2_sandbox.schemas.fourcastnet import FourCastNetHostedInferenceRequest
 
 
 def test_fourcastnet_tar_decoder_reads_nvidia_naming_convention() -> None:
@@ -33,6 +35,77 @@ def test_fourcastnet_tar_decoder_reads_nvidia_naming_convention() -> None:
     assert summary.arrays[0].mean_value == 2.5
 
 
+def test_fourcastnet_tar_sampler_builds_forecast_summary_from_4d_arrays() -> None:
+    processor = FourCastNetPostProcessor()
+    request = FourCastNetHostedInferenceRequest(
+        variables=["w10m", "t2m", "msl", "tcwv", "z500"],
+        simulation_length=1,
+    )
+    content = build_tar_bytes(
+        {
+            "000_000.npy": build_sample_array(
+                wind_speed_ms=8,
+                temperature_k=293.15,
+                pressure_pa=101000,
+                tcwv=40,
+            ),
+            "006_000.npy": build_sample_array(
+                wind_speed_ms=10,
+                temperature_k=294.15,
+                pressure_pa=100800,
+                tcwv=42,
+            ),
+        }
+    )
+
+    forecast = processor.build_forecast_summary_from_tar_bytes(
+        content=content,
+        request=request,
+        latitude=0,
+        longitude=90,
+        generated_at=datetime(2026, 5, 31, 0, 0, tzinfo=UTC),
+    )
+
+    assert forecast.provider == "fourcastnet"
+    assert forecast.model.run_mode == "nim"
+    assert forecast.forecast_window.lead_hours == [0, 6]
+    assert forecast.timeline[0].temperature_c == 20.0
+    assert forecast.timeline[0].wind_speed_ms == 8.0
+    assert forecast.timeline[0].pressure_hpa == 1010.0
+    assert forecast.timeline[0].humidity_percent == 60.0
+    assert forecast.timeline[0].condition == "breezy"
+    assert forecast.timeline[1].temperature_c == 21.0
+
+
+def test_fourcastnet_tar_sampler_accepts_5d_self_hosted_shape() -> None:
+    processor = FourCastNetPostProcessor()
+    request = FourCastNetHostedInferenceRequest(
+        variables=["w10m", "t2m", "msl", "tcwv", "z500"],
+        simulation_length=1,
+    )
+    content = build_tar_bytes(
+        {
+            "000_000.npy": build_sample_array(
+                wind_speed_ms=6,
+                temperature_k=291.15,
+                pressure_pa=101325,
+                tcwv=35,
+            )[np.newaxis, ...],
+        }
+    )
+
+    forecast = processor.build_forecast_summary_from_tar_bytes(
+        content=content,
+        request=request,
+        latitude=0,
+        longitude=90,
+        generated_at=datetime(2026, 5, 31, 0, 0, tzinfo=UTC),
+    )
+
+    assert forecast.timeline[0].temperature_c == 18.0
+    assert forecast.timeline[0].pressure_hpa == 1013.2
+
+
 def build_tar_bytes(entries: dict[str, np.ndarray | bytes]) -> bytes:
     buffer = BytesIO()
     with tarfile.open(fileobj=buffer, mode="w") as archive:
@@ -49,3 +122,21 @@ def build_tar_bytes(entries: dict[str, np.ndarray | bytes]) -> bytes:
             archive.addfile(info, BytesIO(data))
 
     return buffer.getvalue()
+
+
+def build_sample_array(
+    *,
+    wind_speed_ms: float,
+    temperature_k: float,
+    pressure_pa: float,
+    tcwv: float,
+) -> np.ndarray:
+    array = np.zeros((1, 5, 3, 4), dtype=np.float32)
+    latitude_index = 1
+    longitude_index = 1
+    array[0, 0, latitude_index, longitude_index] = wind_speed_ms
+    array[0, 1, latitude_index, longitude_index] = temperature_k
+    array[0, 2, latitude_index, longitude_index] = pressure_pa
+    array[0, 3, latitude_index, longitude_index] = tcwv
+    array[0, 4, latitude_index, longitude_index] = 5500
+    return array
