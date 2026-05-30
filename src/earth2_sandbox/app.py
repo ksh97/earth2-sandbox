@@ -1,8 +1,13 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from earth2_sandbox.config import Settings, get_settings
-from earth2_sandbox.services.forecast import ForecastSummary, MockForecastService
+from earth2_sandbox.services.forecast import (
+    ForecastProviderStatus,
+    ForecastProviderUnavailableError,
+    ForecastSummary,
+    build_forecast_provider,
+)
 
 LOCAL_DEV_ORIGINS = [
     "http://localhost:8081",
@@ -26,7 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    forecast_service = MockForecastService()
+    forecast_provider = build_forecast_provider(settings)
 
     @app.get("/health")
     async def health() -> dict[str, str | bool]:
@@ -34,14 +39,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": "ok",
             "service": settings.app_name,
             "environment": settings.environment,
-            "mock_forecast": settings.enable_mock_forecast,
+            "mock_forecast": settings.forecast_provider == "mock",
+            "forecast_provider": settings.forecast_provider,
         }
+
+    @app.get("/api/v1/forecast/provider/status", response_model=ForecastProviderStatus)
+    async def forecast_provider_status() -> ForecastProviderStatus:
+        return await forecast_provider.get_status()
 
     @app.get("/api/v1/forecast/sample", response_model=ForecastSummary)
     async def sample_forecast(
         latitude: float = Query(..., ge=-90, le=90),
         longitude: float = Query(..., ge=-180, le=180),
     ) -> ForecastSummary:
-        return await forecast_service.get_point_forecast(latitude=latitude, longitude=longitude)
+        try:
+            return await forecast_provider.get_point_forecast(
+                latitude=latitude,
+                longitude=longitude,
+            )
+        except ForecastProviderUnavailableError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
 
     return app

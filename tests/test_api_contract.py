@@ -14,6 +14,7 @@ def test_health_contract() -> None:
         "service": "earth2-sandbox",
         "environment": "local",
         "mock_forecast": True,
+        "forecast_provider": "mock",
     }
 
 
@@ -61,6 +62,21 @@ def test_sample_forecast_contract() -> None:
         "Precipitation",
         "Wind",
         "Model confidence",
+    }
+
+
+def test_forecast_provider_status_contract() -> None:
+    response = client.get("/api/v1/forecast/provider/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "mock",
+        "mode": "deterministic",
+        "configured": True,
+        "ready": True,
+        "supports_point_forecast": True,
+        "endpoint": None,
+        "detail": "Deterministic mock forecast provider is ready.",
     }
 
 

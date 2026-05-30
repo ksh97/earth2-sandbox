@@ -8,7 +8,10 @@ paths:
   checkpoint_dir: ./checkpoints
 
 fourcastnet:
+  forecast_provider: mock
+  endpoint_mode: self_hosted
   nim_base_url: http://localhost:8000
+  hosted_url: https://climate.api.nvidia.com/v1/nvidia/fourcastnet
   request_timeout_seconds: 300
   enable_mock_forecast: true
 

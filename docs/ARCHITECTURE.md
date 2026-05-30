@@ -48,11 +48,22 @@ FourCastNet NIM exposes an HTTP API for inference and health checks. The NVIDIA 
 
 The current codebase starts with a mock forecast provider so that mobile and API development can continue before GPU/NIM deployment is ready.
 
+The backend selects a forecast provider with `EARTH2_FORECAST_PROVIDER`:
+
+- `mock`: deterministic point forecasts used by the mobile prototype
+- `fourcastnet`: readiness/client boundary for self-hosted NIM or the hosted NVIDIA API
+
+The FourCastNet provider intentionally reports readiness separately from point-forecast support. Raw model inference still needs input preparation and post-processing before it can replace the mock mobile payload.
+
 ## First API Contract
 
 `GET /health`
 
 Returns backend status.
+
+`GET /api/v1/forecast/provider/status`
+
+Returns the selected forecast provider, endpoint mode, readiness, and whether point-forecast responses are currently supported.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 
