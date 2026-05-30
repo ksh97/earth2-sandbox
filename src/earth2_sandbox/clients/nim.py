@@ -153,6 +153,7 @@ class FourCastNetNimClient:
             sha256=sha256(content).hexdigest(),
             request_payload=payload,
             json_preview=json_preview,
+            raw_content=content,
         )
 
     def _response_error_detail(self, response: httpx.Response) -> str:

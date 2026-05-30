@@ -26,7 +26,9 @@ class FourCastNetHostedInferenceResult(BaseModel):
     sha256: str
     request_payload: dict[str, int | float | str]
     json_preview: Any | None = None
+    decoded_tar: "FourCastNetDecodedTarSummary | None" = None
     post_processing: "FourCastNetPostProcessingReport | None" = None
+    raw_content: bytes | None = Field(default=None, exclude=True, repr=False)
 
 
 class FourCastNetPostProcessingReport(BaseModel):
@@ -34,3 +36,23 @@ class FourCastNetPostProcessingReport(BaseModel):
     detected_format: Literal["tar", "json", "unknown"]
     required_steps: list[str]
     notes: list[str]
+
+
+class FourCastNetDecodedArray(BaseModel):
+    filename: str
+    lead_time_hours: int
+    batch_index: int
+    shape: list[int]
+    dtype: str
+    finite_count: int
+    min_value: float | None
+    max_value: float | None
+    mean_value: float | None
+
+
+class FourCastNetDecodedTarSummary(BaseModel):
+    member_count: int
+    arrays: list[FourCastNetDecodedArray]
+    lead_time_hours: list[int]
+    batch_indices: list[int]
+    warnings: list[str]

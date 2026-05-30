@@ -1,6 +1,9 @@
 import asyncio
+import tarfile
+from io import BytesIO
 
 import httpx
+import numpy as np
 from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
@@ -137,10 +140,17 @@ def test_build_forecast_provider_can_select_fourcastnet_hosted_mode() -> None:
 
 
 def test_hosted_inference_route_returns_adapter_result() -> None:
+    content = _build_tar_bytes(
+        {
+            "000_000.npy": np.array([[[[1.0, 2.0]]]], dtype=np.float32),
+            "006_000.npy": np.array([[[[3.0, 4.0]]]], dtype=np.float32),
+        }
+    )
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            content=b"fake tar bytes",
+            content=content,
             headers={"content-type": "application/x-tar"},
         )
 
@@ -169,10 +179,27 @@ def test_hosted_inference_route_returns_adapter_result() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["content_type"] == "application/x-tar"
-    assert body["byte_length"] == len(b"fake tar bytes")
+    assert body["byte_length"] == len(content)
     assert body["request_payload"]["variables"] == "w10m"
     assert body["request_payload"]["simulation_length"] == 1
+    assert body["decoded_tar"]["member_count"] == 2
+    assert body["decoded_tar"]["lead_time_hours"] == [0, 6]
+    assert body["decoded_tar"]["arrays"][0]["shape"] == [1, 1, 1, 2]
     assert body["post_processing"]["mobile_summary_ready"] is False
     assert body["post_processing"]["detected_format"] == "tar"
-    assert "Decode returned tar archive" in body["post_processing"]["required_steps"][1]
-    assert "Raw model output is intentionally not exposed" in body["post_processing"]["notes"][2]
+    assert "Use decoded NumPy member metadata" in body["post_processing"]["required_steps"][1]
+    assert "Raw model output is intentionally not exposed" in body["post_processing"]["notes"][3]
+
+
+def _build_tar_bytes(entries: dict[str, np.ndarray]) -> bytes:
+    buffer = BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for filename, array in entries.items():
+            array_buffer = BytesIO()
+            np.save(array_buffer, array)
+            data = array_buffer.getvalue()
+            info = tarfile.TarInfo(filename)
+            info.size = len(data)
+            archive.addfile(info, BytesIO(data))
+
+    return buffer.getvalue()
