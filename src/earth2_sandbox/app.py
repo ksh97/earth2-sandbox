@@ -4,9 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from earth2_sandbox.config import Settings, get_settings
 from earth2_sandbox.providers import (
     ForecastProviderUnavailableError,
+    FourCastNetForecastProvider,
     build_forecast_provider,
 )
 from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
+from earth2_sandbox.schemas.fourcastnet import (
+    FourCastNetHostedInferenceRequest,
+    FourCastNetHostedInferenceResult,
+)
 
 LOCAL_DEV_ORIGINS = [
     "http://localhost:8081",
@@ -16,7 +21,10 @@ LOCAL_DEV_ORIGINS = [
 ]
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    forecast_provider_override: object | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
     app = FastAPI(
         title=settings.app_name,
@@ -30,7 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    forecast_provider = build_forecast_provider(settings)
+    forecast_provider = forecast_provider_override or build_forecast_provider(settings)
 
     @app.get("/health")
     async def health() -> dict[str, str | bool]:
@@ -56,6 +64,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 latitude=latitude,
                 longitude=longitude,
             )
+        except ForecastProviderUnavailableError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+
+    @app.post(
+        "/api/v1/forecast/fourcastnet/hosted/infer",
+        response_model=FourCastNetHostedInferenceResult,
+    )
+    async def hosted_fourcastnet_inference(
+        request: FourCastNetHostedInferenceRequest,
+    ) -> FourCastNetHostedInferenceResult:
+        if not isinstance(forecast_provider, FourCastNetForecastProvider):
+            raise HTTPException(
+                status_code=409,
+                detail="Select EARTH2_FORECAST_PROVIDER=fourcastnet to run hosted inference.",
+            )
+
+        try:
+            return await forecast_provider.run_hosted_inference(request)
         except ForecastProviderUnavailableError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
 

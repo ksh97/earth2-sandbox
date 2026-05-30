@@ -73,6 +73,18 @@ python -m uvicorn earth2_sandbox.main:app --reload
 - 예시 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
 
+Hosted NVIDIA API 실험을 할 때는 `.env`에서 다음 값을 설정한 뒤 서버를 재시작합니다.
+
+```powershell
+EARTH2_FORECAST_PROVIDER=fourcastnet
+EARTH2_FOURCASTNET_ENDPOINT_MODE=hosted
+EARTH2_NVIDIA_API_KEY=your_nvidia_api_key
+```
+
+첫 hosted inference adapter는 다음 엔드포인트로 호출할 수 있습니다.
+
+- Hosted FourCastNet inference: http://127.0.0.1:8000/api/v1/forecast/fourcastnet/hosted/infer
+
 ## 모바일 앱 시작
 
 ```powershell
@@ -91,6 +103,7 @@ Android Emulator에서 로컬 백엔드에 접속할 때는 `http://10.0.2.2:800
 - 처음에는 mock API로 모바일 화면과 API 계약을 검증합니다.
 - FourCastNet NIM 연동은 백엔드에서 숨기고, 앱은 단순한 JSON API만 호출하게 만듭니다.
 - `.env`에서 `EARTH2_FORECAST_PROVIDER=mock` 또는 `fourcastnet`으로 backend provider를 전환합니다.
+- 첫 실제 추론 실험은 hosted NVIDIA API 경로로 진행하고, self-hosted NIM은 GPU/Docker/ERA5 입력 준비 후 붙입니다.
 
 ## 참고 문서
 
