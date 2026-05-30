@@ -42,6 +42,26 @@ def test_sample_forecast_contract() -> None:
         "wind_speed",
         "humidity",
     }
+    assert body["model"]["run_mode"] == "mock"
+    assert body["forecast_window"]["lead_hours"] == [0, 6, 12, 24, 36, 48, 72]
+    assert len(body["timeline"]) == 7
+    assert {
+        "lead_time_hours",
+        "valid_at",
+        "temperature_c",
+        "wind_speed_ms",
+        "humidity_percent",
+        "precipitation_probability_percent",
+        "pressure_hpa",
+        "confidence",
+        "condition",
+        "summary",
+    }.issubset(body["timeline"][0])
+    assert {signal["name"] for signal in body["signals"]} == {
+        "Precipitation",
+        "Wind",
+        "Model confidence",
+    }
 
 
 def test_sample_forecast_rejects_invalid_location() -> None:

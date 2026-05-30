@@ -28,6 +28,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 
 - Location input using latitude and longitude.
 - Forecast summary cards.
+- Forecast detail view with timeline steps, model metadata, and signal levels.
 - Mock backend API integration.
 - Loading and error states.
 
