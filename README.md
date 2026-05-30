@@ -97,6 +97,14 @@ EARTH2_NVIDIA_API_KEY=your_nvidia_api_key
 
 실제 NVIDIA API key는 `.env`에만 저장하고 GitHub에는 올리지 않습니다. 샘플 tar 응답 파일을 받은 경우에도 `data/` 아래 로컬 파일로만 보관하고 커밋하지 않습니다.
 
+Hosted API smoke test는 다음 명령으로 실행할 수 있습니다. 이 스크립트는 key를 출력하지 않고, tar가 직접 내려오면 `data/samples/`에 저장합니다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\smoke_hosted_fourcastnet.py
+```
+
+현재 hosted API가 tar 본문 대신 `{"message": "Large asset written"}` JSON marker를 반환할 수 있습니다. 이 경우 API key와 요청 자체는 동작하지만, point forecast 샘플링을 완료하려면 다운로드 가능한 tar URL 또는 로컬 샘플 tar 파일이 추가로 필요합니다.
+
 ## 모바일 앱 시작
 
 ```powershell

@@ -145,6 +145,7 @@ class FourCastNetNimClient:
         content_type = response.headers.get("content-type", "")
         content = response.content
         json_preview = self._json_preview(response) if "application/json" in content_type else None
+        large_asset_message = self._large_asset_message(json_preview)
         return FourCastNetHostedInferenceResult(
             endpoint=self.base_url,
             status_code=response.status_code,
@@ -153,6 +154,9 @@ class FourCastNetNimClient:
             sha256=sha256(content).hexdigest(),
             request_payload=payload,
             json_preview=json_preview,
+            nvcf_request_id=response.headers.get("nvcf-reqid"),
+            nvcf_status=response.headers.get("nvcf-status"),
+            large_asset_message=large_asset_message,
             raw_content=content,
         )
 
@@ -172,4 +176,10 @@ class FourCastNetNimClient:
             return response.json()
         except ValueError:
             return None
+
+    def _large_asset_message(self, preview: object | None) -> str | None:
+        if isinstance(preview, dict) and preview.get("message") == "Large asset written":
+            return "Large asset written"
+
+        return None
 

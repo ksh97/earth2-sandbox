@@ -85,6 +85,11 @@ nearest global latitude/longitude grid cell, converts Kelvin to Celsius and Pa t
 and derives a lightweight moisture/rain-risk proxy until richer precipitation variables
 or calibrated post-processing are available.
 
+The hosted API may return a small JSON marker such as `{"message": "Large asset written"}`
+instead of the tar bytes when the result is handled as a large NVCF output. The backend
+records the NVCF request id and status for diagnostics, but point sampling still requires
+actual tar bytes from a downloadable hosted result or a local sample file.
+
 ## First API Contract
 
 `GET /health`

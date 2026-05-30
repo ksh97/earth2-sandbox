@@ -28,6 +28,9 @@ class FourCastNetHostedInferenceResult(BaseModel):
     json_preview: Any | None = None
     decoded_tar: "FourCastNetDecodedTarSummary | None" = None
     post_processing: "FourCastNetPostProcessingReport | None" = None
+    nvcf_request_id: str | None = None
+    nvcf_status: str | None = None
+    large_asset_message: str | None = None
     raw_content: bytes | None = Field(default=None, exclude=True, repr=False)
 
 
