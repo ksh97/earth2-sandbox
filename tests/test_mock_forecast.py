@@ -19,3 +19,9 @@ def test_mock_forecast_returns_mobile_friendly_summary() -> None:
         "wind_speed",
         "humidity",
     }
+    assert forecast.model.name == "FourCastNet-compatible mock"
+    assert forecast.forecast_window.lead_hours == [0, 6, 12, 24, 36, 48, 72]
+    assert len(forecast.timeline) == 7
+    assert forecast.timeline[0].lead_time_hours == 0
+    assert forecast.timeline[-1].lead_time_hours == 72
+    assert forecast.signals

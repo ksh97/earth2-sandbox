@@ -6,6 +6,41 @@ export type ForecastMetric = {
   unit: "celsius" | "m/s" | "percent" | string;
 };
 
+export type ForecastModelInfo = {
+  name: string;
+  version: string;
+  resolution: string;
+  run_mode: "mock" | "nim";
+};
+
+export type ForecastWindow = {
+  start_at: string;
+  end_at: string;
+  step_hours: number;
+  lead_hours: number[];
+};
+
+export type ForecastCondition = "clear" | "breezy" | "humid" | "rain_watch";
+
+export type ForecastTimelineStep = {
+  lead_time_hours: number;
+  valid_at: string;
+  temperature_c: number;
+  wind_speed_ms: number;
+  humidity_percent: number;
+  precipitation_probability_percent: number;
+  pressure_hpa: number;
+  confidence: number;
+  condition: ForecastCondition;
+  summary: string;
+};
+
+export type ForecastSignal = {
+  name: string;
+  level: "low" | "moderate" | "elevated";
+  message: string;
+};
+
 export type ForecastSummary = {
   provider: "mock" | "fourcastnet";
   generated_at: string;
@@ -13,6 +48,10 @@ export type ForecastSummary = {
   longitude: number;
   headline: string;
   metrics: ForecastMetric[];
+  model: ForecastModelInfo;
+  forecast_window: ForecastWindow;
+  timeline: ForecastTimelineStep[];
+  signals: ForecastSignal[];
 };
 
 type ForecastRequest = {

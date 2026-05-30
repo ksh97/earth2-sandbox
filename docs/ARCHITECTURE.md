@@ -56,7 +56,12 @@ Returns backend status.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 
-Returns a small forecast summary for UI prototyping.
+Returns a mobile-friendly forecast payload for UI prototyping:
+
+- top-level summary metrics for the overview screen
+- model metadata and forecast window information
+- deterministic timeline steps for the detail screen
+- signal levels for precipitation, wind, and model confidence
 
 ## Later API Contracts
 

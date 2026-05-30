@@ -13,13 +13,19 @@ import {
   View,
 } from "react-native";
 
-import { fetchSampleForecast, ForecastSummary } from "./src/api/forecast";
+import {
+  fetchSampleForecast,
+  ForecastSummary,
+  ForecastTimelineStep,
+} from "./src/api/forecast";
 import { LocationPreset, locationPresets } from "./src/locations";
 import { colors, spacing } from "./src/theme";
 
 const initialLatitude = "37.5665";
 const initialLongitude = "126.9780";
 const initialPreset = locationPresets[0] ?? null;
+type ScreenMode = "overview" | "details";
+const screenModes: ScreenMode[] = ["overview", "details"];
 
 export default function App() {
   const [latitude, setLatitude] = useState(initialLatitude);
@@ -28,6 +34,8 @@ export default function App() {
   const [forecast, setForecast] = useState<ForecastSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [screenMode, setScreenMode] = useState<ScreenMode>("overview");
+  const [selectedLeadHour, setSelectedLeadHour] = useState<number | null>(null);
 
   const generatedAt = useMemo(() => {
     if (!forecast) {
@@ -41,6 +49,26 @@ export default function App() {
       minute: "2-digit",
     }).format(new Date(forecast.generated_at));
   }, [forecast]);
+
+  const forecastWindowEnd = useMemo(() => {
+    if (!forecast) {
+      return "";
+    }
+
+    return formatDateTime(forecast.forecast_window.end_at);
+  }, [forecast]);
+
+  const timeline = forecast?.timeline ?? [];
+  const selectedTimelineStep = useMemo(() => {
+    if (timeline.length === 0) {
+      return null;
+    }
+
+    return (
+      timeline.find((step) => step.lead_time_hours === selectedLeadHour) ??
+      timeline[0]
+    );
+  }, [selectedLeadHour, timeline]);
 
   const syncState = errorMessage ? "Offline" : isLoading ? "Syncing" : "Ready";
 
@@ -64,6 +92,7 @@ export default function App() {
         longitude: parsedLongitude,
       });
       setForecast(nextForecast);
+      setSelectedLeadHour(nextForecast.timeline[0]?.lead_time_hours ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Forecast request failed.";
       setErrorMessage(message);
@@ -218,19 +247,139 @@ export default function App() {
 
           {forecast ? (
             <>
-              <Text style={styles.headline}>{forecast.headline}</Text>
-              <View style={styles.metricsGrid}>
-                {forecast.metrics.map((metric) => (
-                  <View key={metric.name} style={styles.metricCard}>
-                    <View style={styles.metricAccent} />
-                    <Text style={styles.metricName}>{formatMetricName(metric.name)}</Text>
-                    <Text style={styles.metricValue}>
-                      {metric.value}
-                      <Text style={styles.metricUnit}> {formatUnit(metric.unit)}</Text>
-                    </Text>
-                  </View>
-                ))}
+              <View style={styles.segmentedControl}>
+                {screenModes.map((mode) => {
+                  const isSelected = screenMode === mode;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={mode}
+                      onPress={() => setScreenMode(mode)}
+                      style={({ pressed }) => [
+                        styles.segmentButton,
+                        isSelected && styles.segmentButtonSelected,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          isSelected && styles.segmentTextSelected,
+                        ]}
+                      >
+                        {formatScreenMode(mode)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+
+              {screenMode === "overview" ? (
+                <>
+                  <Text style={styles.headline}>{forecast.headline}</Text>
+                  <View style={styles.metricsGrid}>
+                    {forecast.metrics.map((metric) => (
+                      <View key={metric.name} style={styles.metricCard}>
+                        <View style={styles.metricAccent} />
+                        <Text style={styles.metricName}>{formatMetricName(metric.name)}</Text>
+                        <Text style={styles.metricValue}>
+                          {metric.value}
+                          <Text style={styles.metricUnit}> {formatUnit(metric.unit)}</Text>
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.detailPanel}>
+                    <View style={styles.detailHeader}>
+                      <View style={styles.detailHeaderCopy}>
+                        <Text style={styles.panelTitle}>Forecast detail</Text>
+                        <Text style={styles.mutedText}>{forecast.model.name}</Text>
+                      </View>
+                      <Text style={styles.badge}>{forecast.model.run_mode}</Text>
+                    </View>
+                    <View style={styles.detailRows}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Resolution</Text>
+                        <Text style={styles.detailValue}>{forecast.model.resolution}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Forecast window</Text>
+                        <Text style={styles.detailValue}>Until {forecastWindowEnd}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Step</Text>
+                        <Text style={styles.detailValue}>
+                          Every {forecast.forecast_window.step_hours}h
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <ScrollView
+                    contentContainerStyle={styles.timelineRailContent}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.timelineRail}
+                  >
+                    {timeline.map((step) => {
+                      const isSelected =
+                        selectedTimelineStep?.lead_time_hours === step.lead_time_hours;
+
+                      return (
+                        <Pressable
+                          accessibilityRole="button"
+                          key={step.lead_time_hours}
+                          onPress={() => setSelectedLeadHour(step.lead_time_hours)}
+                          style={({ pressed }) => [
+                            styles.timelineChip,
+                            isSelected && styles.timelineChipSelected,
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.timelineLead,
+                              isSelected && styles.timelineTextSelected,
+                            ]}
+                          >
+                            {formatLeadTime(step.lead_time_hours)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.timelineCondition,
+                              isSelected && styles.timelineTextSelected,
+                            ]}
+                          >
+                            {formatCondition(step.condition)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {selectedTimelineStep ? (
+                    <ForecastTimelineDetail step={selectedTimelineStep} />
+                  ) : null}
+
+                  <View style={styles.signalList}>
+                    {forecast.signals.map((signal) => (
+                      <View key={signal.name} style={styles.signalRow}>
+                        <View style={styles.signalCopy}>
+                          <Text style={styles.signalName}>{signal.name}</Text>
+                          <Text style={styles.signalMessage}>{signal.message}</Text>
+                        </View>
+                        <Text style={[styles.signalLevel, signalLevelStyle(signal.level)]}>
+                          {signal.level}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
             </>
           ) : null}
         </ScrollView>
@@ -239,8 +388,87 @@ export default function App() {
   );
 }
 
+function ForecastTimelineDetail({ step }: { step: ForecastTimelineStep }) {
+  return (
+    <View style={styles.timelineDetailPanel}>
+      <View style={styles.detailHeader}>
+        <View style={styles.detailHeaderCopy}>
+          <Text style={styles.panelTitle}>{formatLeadTime(step.lead_time_hours)} detail</Text>
+          <Text style={styles.mutedText}>{formatDateTime(step.valid_at)}</Text>
+        </View>
+        <Text style={styles.conditionBadge}>{formatCondition(step.condition)}</Text>
+      </View>
+      <Text style={styles.timelineSummary}>{step.summary}</Text>
+      <View style={styles.detailMetricsGrid}>
+        <DetailMetric label="Temperature" value={`${step.temperature_c} C`} />
+        <DetailMetric label="Wind" value={`${step.wind_speed_ms} m/s`} />
+        <DetailMetric label="Humidity" value={`${step.humidity_percent}%`} />
+        <DetailMetric
+          label="Rain chance"
+          value={`${step.precipitation_probability_percent}%`}
+        />
+        <DetailMetric label="Pressure" value={`${step.pressure_hpa} hPa`} />
+        <DetailMetric label="Confidence" value={formatConfidence(step.confidence)} />
+      </View>
+    </View>
+  );
+}
+
+function DetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailMetric}>
+      <Text style={styles.detailMetricLabel}>{label}</Text>
+      <Text style={styles.detailMetricValue}>{value}</Text>
+    </View>
+  );
+}
+
+function formatScreenMode(mode: ScreenMode) {
+  return mode === "overview" ? "Overview" : "Details";
+}
+
 function formatMetricName(name: string) {
   return name.replace(/_/g, " ");
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatLeadTime(leadTimeHours: number) {
+  return leadTimeHours === 0 ? "Now" : `+${leadTimeHours}h`;
+}
+
+function formatCondition(condition: string) {
+  const conditionMap: Record<string, string> = {
+    breezy: "Breezy",
+    clear: "Clear",
+    humid: "Humid",
+    rain_watch: "Rain watch",
+  };
+
+  return conditionMap[condition] ?? condition;
+}
+
+function formatConfidence(confidence: number) {
+  return `${Math.round(confidence * 100)}%`;
+}
+
+function signalLevelStyle(level: "low" | "moderate" | "elevated") {
+  if (level === "elevated") {
+    return styles.signalLevelElevated;
+  }
+
+  if (level === "moderate") {
+    return styles.signalLevelModerate;
+  }
+
+  return styles.signalLevelLow;
 }
 
 function formatUnit(unit: string) {
@@ -487,6 +715,36 @@ const styles = StyleSheet.create({
     minHeight: 82,
     padding: spacing.md,
   },
+  segmentedControl: {
+    backgroundColor: colors.input,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    padding: 4,
+  },
+  segmentButton: {
+    alignItems: "center",
+    borderRadius: 6,
+    flex: 1,
+    minHeight: 40,
+    justifyContent: "center",
+  },
+  segmentButtonSelected: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+  },
+  segmentText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  segmentTextSelected: {
+    color: colors.text,
+  },
   mutedText: {
     color: colors.muted,
     fontSize: 13,
@@ -554,5 +812,197 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     fontWeight: "700",
+  },
+  detailPanel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  detailHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+  },
+  detailHeaderCopy: {
+    flex: 1,
+  },
+  detailRows: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+  },
+  detailRow: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    minHeight: 44,
+  },
+  detailLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  detailValue: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0,
+    textAlign: "right",
+  },
+  timelineRail: {
+    marginHorizontal: -spacing.lg,
+  },
+  timelineRailContent: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  timelineChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 2,
+    minHeight: 68,
+    minWidth: 98,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+  },
+  timelineChipSelected: {
+    backgroundColor: colors.hero,
+    borderColor: colors.heroBorder,
+  },
+  timelineLead: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  timelineCondition: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+  timelineTextSelected: {
+    color: colors.surface,
+  },
+  timelineDetailPanel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  conditionBadge: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: 8,
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    textTransform: "uppercase",
+  },
+  timelineSummary: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0,
+  },
+  detailMetricsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  detailMetric: {
+    backgroundColor: colors.input,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: "31%",
+    flexGrow: 1,
+    minHeight: 78,
+    minWidth: 118,
+    padding: spacing.sm,
+  },
+  detailMetricLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  detailMetricValue: {
+    color: colors.text,
+    fontSize: 19,
+    fontWeight: "900",
+    letterSpacing: 0,
+    marginTop: spacing.xs,
+  },
+  signalList: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  signalRow: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    minHeight: 74,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  signalCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  signalName: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+  signalMessage: {
+    color: colors.muted,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  signalLevel: {
+    borderRadius: 8,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0,
+    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    textTransform: "uppercase",
+  },
+  signalLevelLow: {
+    backgroundColor: colors.accentSoft,
+    color: colors.text,
+  },
+  signalLevelModerate: {
+    backgroundColor: colors.badge,
+    color: colors.text,
+  },
+  signalLevelElevated: {
+    backgroundColor: colors.errorSurface,
+    color: colors.error,
   },
 });
