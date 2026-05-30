@@ -1,6 +1,10 @@
-from earth2_sandbox.clients.nim import FourCastNetNimClient
+from earth2_sandbox.clients.nim import FourCastNetInferenceError, FourCastNetNimClient
 from earth2_sandbox.providers.base import ForecastProviderUnavailableError
 from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
+from earth2_sandbox.schemas.fourcastnet import (
+    FourCastNetHostedInferenceRequest,
+    FourCastNetHostedInferenceResult,
+)
 
 
 class FourCastNetForecastProvider:
@@ -31,6 +35,20 @@ class FourCastNetForecastProvider:
             else "FourCastNet provider is not ready. Use mock provider until NIM is configured."
         )
         raise ForecastProviderUnavailableError(detail)
+
+    async def run_hosted_inference(
+        self,
+        request: FourCastNetHostedInferenceRequest,
+    ) -> FourCastNetHostedInferenceResult:
+        if self.client.mode != "hosted":
+            raise ForecastProviderUnavailableError(
+                "Hosted inference requires EARTH2_FOURCASTNET_ENDPOINT_MODE=hosted."
+            )
+
+        try:
+            return await self.client.run_hosted_inference(request)
+        except FourCastNetInferenceError as error:
+            raise ForecastProviderUnavailableError(str(error)) from error
 
 
 FourCastNetForecastService = FourCastNetForecastProvider

@@ -26,6 +26,7 @@
 ## Phase 3: FourCastNet Integration
 
 - Add a backend forecast provider boundary for mock vs. FourCastNet modes.
+- Add the first hosted NVIDIA FourCastNet inference adapter.
 - Run or access FourCastNet NIM.
 - Add NIM readiness checks.
 - Implement an inference request path.
