@@ -3,6 +3,7 @@ from earth2_sandbox.config import Settings
 from earth2_sandbox.providers.base import ForecastProvider
 from earth2_sandbox.providers.fourcastnet import FourCastNetForecastProvider
 from earth2_sandbox.providers.mock import MockForecastProvider
+from earth2_sandbox.storage import FourCastNetResultCache
 
 
 def build_forecast_provider(settings: Settings) -> ForecastProvider:
@@ -20,5 +21,13 @@ def build_forecast_provider(settings: Settings) -> ForecastProvider:
         timeout_seconds=settings.request_timeout_seconds,
         mode=settings.fourcastnet_endpoint_mode,
         api_key=api_key,
+        status_url=settings.nvcf_status_url,
+        max_poll_attempts=settings.nvcf_max_poll_attempts,
+        poll_interval_seconds=settings.nvcf_poll_interval_seconds,
     )
-    return FourCastNetForecastProvider(client=client)
+    result_cache = (
+        FourCastNetResultCache(settings.fourcastnet_cache_dir)
+        if settings.fourcastnet_cache_enabled
+        else None
+    )
+    return FourCastNetForecastProvider(client=client, result_cache=result_cache)

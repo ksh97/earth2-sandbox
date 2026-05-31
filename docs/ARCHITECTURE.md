@@ -51,6 +51,7 @@ Current backend layout:
 - `providers/factory.py`: environment-driven provider selection
 - `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
 - `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
+- `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
 
 ### FourCastNet NIM
 
@@ -85,9 +86,22 @@ nearest global latitude/longitude grid cell, converts Kelvin to Celsius and Pa t
 and derives a lightweight moisture/rain-risk proxy until richer precipitation variables
 or calibrated post-processing are available.
 
-The hosted API may return a small JSON marker such as `{"message": "Large asset written"}`
-instead of the tar bytes when the result is handled as a large NVCF output. The backend
-records the NVCF request id and status for diagnostics, but point sampling still requires
+The hosted API may run asynchronously or store large outputs outside the immediate response.
+The backend client handles the current NVCF-oriented flow in three layers:
+
+- `202 Accepted`: poll the configured NVCF status endpoint with the returned request id.
+- `302 Location`: download the large result from the returned location without exposing the URL to mobile clients.
+- JSON `responseReference`: download the referenced result when NVIDIA returns a direct response reference.
+
+When tar bytes are available, the provider stores them in the local FourCastNet result cache
+under `data/cache/fourcastnet` by default. The cache key is derived from the hosted request
+payload and requested content type, not from API keys or presigned URLs. This allows point
+forecast development to be replayed from local tar files without repeatedly calling hosted
+inference.
+
+The hosted API may still return a small JSON marker such as `{"message": "Large asset written"}`
+without a downloadable `Location` or `responseReference`. The backend records the NVCF request id,
+status, polling count, and response source for diagnostics, but point sampling still requires
 actual tar bytes from a downloadable hosted result or a local sample file.
 
 ## First API Contract

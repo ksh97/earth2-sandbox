@@ -11,6 +11,7 @@ from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
 from earth2_sandbox.providers import FourCastNetForecastProvider, build_forecast_provider
 from earth2_sandbox.schemas.fourcastnet import FourCastNetHostedInferenceRequest
+from earth2_sandbox.storage import FourCastNetResultCache
 
 
 def test_self_hosted_fourcastnet_readiness_uses_ready_endpoint() -> None:
@@ -134,6 +135,91 @@ def test_hosted_fourcastnet_inference_captures_large_asset_marker() -> None:
     assert result.nvcf_status == "fulfilled"
 
 
+def test_hosted_fourcastnet_inference_polls_and_downloads_redirect() -> None:
+    content = _build_tar_bytes({"000_000.npy": np.array([[[[1.0]]]], dtype=np.float32)})
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url}")
+        if request.method == "POST":
+            return httpx.Response(
+                202,
+                json={"reqId": "test-request-id", "status": "pending"},
+                headers={"content-type": "application/json", "nvcf-reqid": "test-request-id"},
+            )
+        if str(request.url) == "https://api.nvcf.nvidia.com/v2/nvcf/pexec/status/test-request-id":
+            return httpx.Response(
+                302,
+                headers={
+                    "location": "https://download.example/fourcastnet.tar",
+                    "nvcf-status": "fulfilled",
+                },
+            )
+        if str(request.url) == "https://download.example/fourcastnet.tar":
+            return httpx.Response(
+                200,
+                content=content,
+                headers={"content-type": "application/x-tar"},
+            )
+        return httpx.Response(404)
+
+    client = FourCastNetNimClient(
+        base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+        mode="hosted",
+        api_key="test-key",
+        poll_interval_seconds=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = asyncio.run(client.run_hosted_inference(FourCastNetHostedInferenceRequest()))
+
+    assert calls == [
+        "POST https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+        "GET https://api.nvcf.nvidia.com/v2/nvcf/pexec/status/test-request-id",
+        "GET https://download.example/fourcastnet.tar",
+    ]
+    assert result.content_type == "application/x-tar"
+    assert result.raw_content == content
+    assert result.nvcf_request_id == "test-request-id"
+    assert result.nvcf_status == "fulfilled"
+    assert result.poll_attempts == 1
+    assert result.response_source == "redirect"
+    assert result.response_reference_present is True
+
+
+def test_hosted_fourcastnet_inference_downloads_response_reference() -> None:
+    content = _build_tar_bytes({"000_000.npy": np.array([[[[1.0]]]], dtype=np.float32)})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"responseReference": "https://download.example/fourcastnet.tar"},
+                headers={"content-type": "application/json", "nvcf-reqid": "test-request-id"},
+            )
+        if str(request.url) == "https://download.example/fourcastnet.tar":
+            return httpx.Response(
+                200,
+                content=content,
+                headers={"content-type": "application/x-tar"},
+            )
+        return httpx.Response(404)
+
+    client = FourCastNetNimClient(
+        base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+        mode="hosted",
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = asyncio.run(client.run_hosted_inference(FourCastNetHostedInferenceRequest()))
+
+    assert result.content_type == "application/x-tar"
+    assert result.raw_content == content
+    assert result.response_source == "response_reference"
+    assert result.response_reference_present is True
+
+
 def test_hosted_fourcastnet_inference_requires_api_key() -> None:
     client = FourCastNetNimClient(
         base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
@@ -239,9 +325,52 @@ def test_hosted_fourcastnet_point_forecast_reports_large_asset_marker() -> None:
         asyncio.run(provider.get_point_forecast(latitude=0, longitude=90))
     except RuntimeError as error:
         assert "large asset marker" in str(error)
-        assert "NVCF polling or redirect handling is not wired yet" in str(error)
+        assert "No downloadable responseReference or Location header was available" in str(error)
     else:
         raise AssertionError("Expected large asset marker to block point forecast sampling.")
+
+
+def test_fourcastnet_provider_uses_cached_tar_for_reproducible_point_forecast(tmp_path) -> None:
+    content = _build_tar_bytes(
+        {
+            "000_000.npy": _build_point_array(
+                wind_speed_ms=7,
+                temperature_k=292.15,
+                pressure_pa=101100,
+                tcwv=36,
+            ),
+        }
+    )
+    call_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        return httpx.Response(
+            200,
+            content=content,
+            headers={"content-type": "application/x-tar"},
+        )
+
+    cache = FourCastNetResultCache(tmp_path)
+    provider = FourCastNetForecastProvider(
+        client=FourCastNetNimClient(
+            base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+            mode="hosted",
+            api_key="test-key",
+            transport=httpx.MockTransport(handler),
+        ),
+        result_cache=cache,
+    )
+
+    first = asyncio.run(provider.get_point_forecast(latitude=0, longitude=90))
+    second = asyncio.run(provider.get_point_forecast(latitude=0, longitude=90))
+
+    assert call_count == 1
+    assert first.timeline[0].temperature_c == 19.0
+    assert second.timeline[0].temperature_c == 19.0
+    assert list(tmp_path.glob("*.tar"))
+    assert list(tmp_path.glob("*.json"))
 
 
 def test_hosted_inference_route_returns_adapter_result() -> None:
@@ -293,7 +422,7 @@ def test_hosted_inference_route_returns_adapter_result() -> None:
     assert body["post_processing"]["mobile_summary_ready"] is False
     assert body["post_processing"]["detected_format"] == "tar"
     assert "Use decoded NumPy member metadata" in body["post_processing"]["required_steps"][1]
-    assert "Raw model output is intentionally not exposed" in body["post_processing"]["notes"][3]
+    assert "Raw model output is intentionally not exposed" in body["post_processing"]["notes"][-1]
 
 
 def _build_tar_bytes(entries: dict[str, np.ndarray]) -> bytes:
