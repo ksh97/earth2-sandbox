@@ -2,6 +2,7 @@
 
 from earth2_sandbox.services.jobs import (
     FileForecastJobStore,
+    ForecastJobConflictError,
     ForecastJobNotFoundError,
     ForecastJobService,
     ForecastJobStore,
@@ -10,6 +11,7 @@ from earth2_sandbox.services.jobs import (
 
 __all__ = [
     "FileForecastJobStore",
+    "ForecastJobConflictError",
     "ForecastJobNotFoundError",
     "ForecastJobService",
     "ForecastJobStore",

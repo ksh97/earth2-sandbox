@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     fourcastnet_cache_dir: str = "./data/cache/fourcastnet"
     forecast_job_store_backend: ForecastJobStoreBackend = "memory"
     forecast_job_store_dir: str = "./data/jobs"
+    forecast_job_retention_hours: int = 168
 
 
 @lru_cache

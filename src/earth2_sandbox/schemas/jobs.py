@@ -5,7 +5,8 @@ from pydantic import BaseModel, Field
 
 from earth2_sandbox.schemas.forecast import ForecastSummary
 
-ForecastJobStatus = Literal["queued", "running", "succeeded", "failed"]
+ForecastJobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+ForecastJobTerminalStatus = Literal["succeeded", "failed", "cancelled"]
 
 
 class ForecastJobCreateRequest(BaseModel):
@@ -38,6 +39,8 @@ class ForecastJobSummary(BaseModel):
     status: ForecastJobStatus
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
+    parent_job_id: str | None = None
+    attempt: int = Field(default=1, ge=1)
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None = None
@@ -51,11 +54,38 @@ class ForecastJobListResponse(BaseModel):
     jobs: list[ForecastJobSummary]
 
 
+class ForecastJobPollResponse(BaseModel):
+    id: str
+    status: ForecastJobStatus
+    terminal: bool
+    forecast_ready: bool
+    updated_at: datetime
+    retry_after_seconds: int | None = None
+    event_count: int
+    latest_event: ForecastJobEvent | None = None
+    links: dict[str, str] = Field(default_factory=dict)
+
+
+class ForecastJobCleanupRequest(BaseModel):
+    older_than_hours: int = Field(default=168, ge=1, le=8760)
+    statuses: list[ForecastJobTerminalStatus] = Field(
+        default_factory=lambda: ["succeeded", "failed", "cancelled"]
+    )
+
+
+class ForecastJobCleanupResponse(BaseModel):
+    deleted_count: int
+    cutoff: datetime
+    statuses: list[ForecastJobTerminalStatus]
+
+
 class ForecastJob(BaseModel):
     id: str
     status: ForecastJobStatus
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
+    parent_job_id: str | None = None
+    attempt: int = Field(default=1, ge=1)
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None = None

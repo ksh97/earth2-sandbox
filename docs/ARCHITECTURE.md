@@ -166,6 +166,7 @@ Returns the job state:
 - `running`: provider request is executing
 - `succeeded`: forecast summary is available
 - `failed`: provider or post-processing failed
+- `cancelled`: client requested cancellation before a terminal result was stored
 
 The job response includes a `diagnostics` object. Mock providers return minimal provider
 diagnostics. FourCastNet jobs can expose backend-only operational facts such as response
@@ -176,6 +177,30 @@ Full job responses also include an `events` array. Events record lifecycle trans
 accepted, provider request started, forecast summary ready, or failure. This is a small local
 event-history boundary that can later move to durable event storage without changing the mobile
 contract.
+
+`GET /api/v1/forecast/jobs/{job_id}/poll`
+
+Returns a lightweight polling document for mobile clients. It includes status, terminal flag,
+forecast readiness, latest event, retry-after hint, and links, but intentionally excludes the
+full forecast payload.
+
+`POST /api/v1/forecast/jobs/{job_id}/cancel`
+
+Transitions a `queued` or `running` job to `cancelled`. The current in-process worker cannot
+abort an already-running provider request at the transport layer, but it checks the latest job
+state before storing a provider result so a cancelled job is not overwritten as succeeded.
+
+`POST /api/v1/forecast/jobs/{job_id}/retry`
+
+Creates a new job for the same coordinates once the source job is terminal. The new job records
+`parent_job_id` and increments `attempt`, which keeps retry history observable without mutating
+the original job document.
+
+`POST /api/v1/forecast/jobs/cleanup`
+
+Deletes terminal jobs older than the configured retention window. `EARTH2_FORECAST_JOB_RETENTION_HOURS`
+defaults to 168 hours and can be overridden per cleanup request. This keeps local job files bounded
+while preserving active work and recent diagnostics.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 

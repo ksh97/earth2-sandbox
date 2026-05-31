@@ -16,12 +16,16 @@ from earth2_sandbox.schemas.fourcastnet import (
 )
 from earth2_sandbox.schemas.jobs import (
     ForecastJob,
+    ForecastJobCleanupRequest,
+    ForecastJobCleanupResponse,
     ForecastJobCreateRequest,
     ForecastJobListResponse,
+    ForecastJobPollResponse,
     ForecastJobStatus,
 )
 from earth2_sandbox.services.jobs import (
     FileForecastJobStore,
+    ForecastJobConflictError,
     ForecastJobNotFoundError,
     ForecastJobService,
     InMemoryForecastJobStore,
@@ -62,6 +66,7 @@ def create_app(
     forecast_job_service = forecast_job_service_override or ForecastJobService(
         provider=forecast_provider,
         store=forecast_job_store,
+        default_retention_hours=settings.forecast_job_retention_hours,
     )
 
     @app.get("/")
@@ -141,12 +146,59 @@ def create_app(
             status=job_status,
         )
 
+    @app.post("/api/v1/forecast/jobs/cleanup", response_model=ForecastJobCleanupResponse)
+    async def cleanup_forecast_jobs(
+        request: ForecastJobCleanupRequest | None = None,
+    ) -> ForecastJobCleanupResponse:
+        return await forecast_job_service.cleanup_jobs(
+            older_than_hours=request.older_than_hours if request else None,
+            statuses=request.statuses if request else None,
+        )
+
     @app.get("/api/v1/forecast/jobs/{job_id}", response_model=ForecastJob)
     async def get_forecast_job(job_id: str) -> ForecastJob:
         try:
             return await forecast_job_service.get_job(job_id)
         except ForecastJobNotFoundError as error:
             raise HTTPException(status_code=404, detail="Forecast job not found.") from error
+
+    @app.get("/api/v1/forecast/jobs/{job_id}/poll", response_model=ForecastJobPollResponse)
+    async def poll_forecast_job(job_id: str) -> ForecastJobPollResponse:
+        try:
+            return await forecast_job_service.poll_job(job_id)
+        except ForecastJobNotFoundError as error:
+            raise HTTPException(status_code=404, detail="Forecast job not found.") from error
+
+    @app.post(
+        "/api/v1/forecast/jobs/{job_id}/cancel",
+        response_model=ForecastJob,
+    )
+    async def cancel_forecast_job(job_id: str) -> ForecastJob:
+        try:
+            return await forecast_job_service.cancel_job(job_id)
+        except ForecastJobNotFoundError as error:
+            raise HTTPException(status_code=404, detail="Forecast job not found.") from error
+        except ForecastJobConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.post(
+        "/api/v1/forecast/jobs/{job_id}/retry",
+        response_model=ForecastJob,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def retry_forecast_job(
+        job_id: str,
+        background_tasks: BackgroundTasks,
+    ) -> ForecastJob:
+        try:
+            job = await forecast_job_service.retry_job(job_id)
+        except ForecastJobNotFoundError as error:
+            raise HTTPException(status_code=404, detail="Forecast job not found.") from error
+        except ForecastJobConflictError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+        background_tasks.add_task(forecast_job_service.run_job, job.id)
+        return job
 
     @app.post(
         "/api/v1/forecast/fourcastnet/hosted/infer",

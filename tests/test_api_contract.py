@@ -80,6 +80,9 @@ def test_forecast_job_contract() -> None:
     assert body["forecast"] is None
     assert [event["status"] for event in body["events"]] == ["queued"]
     assert body["links"]["self"].startswith("/api/v1/forecast/jobs/")
+    assert body["links"]["poll"].endswith("/poll")
+    assert body["links"]["retry"].endswith("/retry")
+    assert body["links"]["cancel"].endswith("/cancel")
 
     job_response = client.get(body["links"]["self"])
 
@@ -91,6 +94,27 @@ def test_forecast_job_contract() -> None:
     assert job["diagnostics"]["provider"] == "mock"
     assert job["diagnostics"]["message"] == "Forecast summary is ready."
     assert [event["status"] for event in job["events"]] == ["queued", "running", "succeeded"]
+
+
+def test_forecast_job_poll_contract() -> None:
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+    created = response.json()
+
+    poll_response = client.get(created["links"]["poll"])
+
+    assert poll_response.status_code == 200
+    body = poll_response.json()
+    assert body["id"] == created["id"]
+    assert body["status"] == "succeeded"
+    assert body["terminal"] is True
+    assert body["forecast_ready"] is True
+    assert body["retry_after_seconds"] is None
+    assert body["event_count"] == 3
+    assert body["latest_event"]["status"] == "succeeded"
+    assert body["links"]["self"] == created["links"]["self"]
 
 
 def test_forecast_jobs_list_contract() -> None:
@@ -115,6 +139,50 @@ def test_forecast_jobs_list_filters_by_status() -> None:
 
     assert response.status_code == 200
     assert response.json()["jobs"] == []
+
+
+def test_forecast_job_retry_contract() -> None:
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+    created = response.json()
+    completed = client.get(created["links"]["self"]).json()
+
+    retry_response = client.post(completed["links"]["retry"])
+
+    assert retry_response.status_code == 202
+    retry = retry_response.json()
+    assert retry["parent_job_id"] == completed["id"]
+    assert retry["attempt"] == completed["attempt"] + 1
+    assert retry["status"] == "queued"
+    assert retry["latitude"] == completed["latitude"]
+    assert retry["longitude"] == completed["longitude"]
+
+
+def test_forecast_job_cancel_rejects_completed_job() -> None:
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+    completed = client.get(response.json()["links"]["self"]).json()
+
+    cancel_response = client.post(completed["links"]["cancel"])
+
+    assert cancel_response.status_code == 409
+    assert "Cannot cancel a succeeded forecast job" in cancel_response.json()["detail"]
+
+
+def test_forecast_job_cleanup_contract() -> None:
+    response = client.post(
+        "/api/v1/forecast/jobs/cleanup",
+        json={"older_than_hours": 8760, "statuses": ["succeeded", "failed", "cancelled"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deleted_count"] == 0
+    assert body["statuses"] == ["cancelled", "failed", "succeeded"]
 
 
 def test_forecast_job_missing_id_returns_404() -> None:
