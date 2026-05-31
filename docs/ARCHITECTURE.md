@@ -170,8 +170,8 @@ Returns the job state:
 
 The job response includes a `diagnostics` object. Mock providers return minimal provider
 diagnostics. FourCastNet jobs can expose backend-only operational facts such as response
-source, cache status, polling count, NVCF request id/status, and byte length. API keys and
-download URLs are never exposed.
+source, cache status, cache artifact id, polling count, NVCF request id/status, and byte length.
+API keys, local filesystem paths, and download URLs are never exposed.
 
 Full job responses also include an `events` array. Events record lifecycle transitions such as
 accepted, provider request started, forecast summary ready, or failure. This is a small local

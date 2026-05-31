@@ -192,6 +192,13 @@ def test_forecast_job_missing_id_returns_404() -> None:
     assert response.json()["detail"] == "Forecast job not found."
 
 
+def test_forecast_job_rejects_non_uuid_id() -> None:
+    response = client.get("/api/v1/forecast/jobs/not-a-uuid")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Forecast job not found."
+
+
 def assert_forecast_contract(response) -> None:
     assert response.status_code == 200
     body = response.json()

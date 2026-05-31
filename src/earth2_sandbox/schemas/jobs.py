@@ -18,7 +18,7 @@ class ForecastJobDiagnostics(BaseModel):
     provider: str | None = None
     response_source: str | None = None
     cache_status: str | None = None
-    cached_tar_path: str | None = None
+    cached_artifact_id: str | None = None
     nvcf_request_id: str | None = None
     nvcf_status: str | None = None
     poll_attempts: int = 0

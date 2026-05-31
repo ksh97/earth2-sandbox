@@ -70,7 +70,7 @@ export type ForecastJobDiagnostics = {
   provider: string | null;
   response_source: string | null;
   cache_status: string | null;
-  cached_tar_path: string | null;
+  cached_artifact_id: string | null;
   nvcf_request_id: string | null;
   nvcf_status: string | null;
   poll_attempts: number;
@@ -332,7 +332,7 @@ function isForecastJobDiagnostics(value: unknown): value is ForecastJobDiagnosti
     (typeof value.provider === "string" || value.provider === null) &&
     (typeof value.response_source === "string" || value.response_source === null) &&
     (typeof value.cache_status === "string" || value.cache_status === null) &&
-    (typeof value.cached_tar_path === "string" || value.cached_tar_path === null) &&
+    (typeof value.cached_artifact_id === "string" || value.cached_artifact_id === null) &&
     (typeof value.nvcf_request_id === "string" || value.nvcf_request_id === null) &&
     (typeof value.nvcf_status === "string" || value.nvcf_status === null) &&
     typeof value.poll_attempts === "number" &&

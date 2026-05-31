@@ -148,7 +148,7 @@ class FourCastNetForecastProvider:
                     request_payload=request_payload,
                     response_source="cache",
                     cache_status="hit",
-                    cached_tar_path=str(record.path),
+                    cached_artifact_id=record.key,
                     raw_content=content,
                 )
 
@@ -165,7 +165,7 @@ class FourCastNetForecastProvider:
             return result.model_copy(
                 update={
                     "cache_status": "stored",
-                    "cached_tar_path": str(record.path),
+                    "cached_artifact_id": record.key,
                 }
             )
 
@@ -179,7 +179,7 @@ class FourCastNetForecastProvider:
             "provider": "fourcastnet",
             "response_source": result.response_source,
             "cache_status": result.cache_status,
-            "cached_tar_path": result.cached_tar_path,
+            "cached_artifact_id": result.cached_artifact_id,
             "nvcf_request_id": result.nvcf_request_id,
             "nvcf_status": result.nvcf_status,
             "poll_attempts": result.poll_attempts,
