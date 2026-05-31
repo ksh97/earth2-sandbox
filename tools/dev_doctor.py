@@ -147,8 +147,10 @@ def check_env_files(doctor: Doctor) -> None:
 
     job_store_backend = root_env.get("EARTH2_FORECAST_JOB_STORE_BACKEND", "memory")
     job_store_dir = root_env.get("EARTH2_FORECAST_JOB_STORE_DIR", "./data/jobs")
+    job_retention_hours = root_env.get("EARTH2_FORECAST_JOB_RETENTION_HOURS", "168")
     doctor.ok("backend env", f"EARTH2_FORECAST_JOB_STORE_BACKEND={job_store_backend}")
     doctor.ok("backend env", f"EARTH2_FORECAST_JOB_STORE_DIR={job_store_dir}")
+    doctor.ok("backend env", f"EARTH2_FORECAST_JOB_RETENTION_HOURS={job_retention_hours}")
     if Path(job_store_dir).is_absolute():
         resolved_job_store_dir = Path(job_store_dir)
     else:

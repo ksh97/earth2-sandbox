@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -13,11 +13,14 @@ from earth2_sandbox.providers import (
 )
 from earth2_sandbox.schemas.jobs import (
     ForecastJob,
+    ForecastJobCleanupResponse,
     ForecastJobDiagnostics,
     ForecastJobEvent,
     ForecastJobListResponse,
+    ForecastJobPollResponse,
     ForecastJobStatus,
     ForecastJobSummary,
+    ForecastJobTerminalStatus,
 )
 
 
@@ -25,8 +28,26 @@ class ForecastJobNotFoundError(KeyError):
     """Raised when a forecast job id is unknown to the configured job store."""
 
 
+class ForecastJobConflictError(RuntimeError):
+    """Raised when a job state transition is not valid for the current status."""
+
+
+TERMINAL_JOB_STATUSES: set[ForecastJobTerminalStatus] = {
+    "succeeded",
+    "failed",
+    "cancelled",
+}
+
+
 class ForecastJobStore(Protocol):
-    async def create(self, *, latitude: float, longitude: float) -> ForecastJob: ...
+    async def create(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        parent_job_id: str | None = None,
+        attempt: int = 1,
+    ) -> ForecastJob: ...
 
     async def get(self, job_id: str) -> ForecastJob: ...
 
@@ -38,6 +59,13 @@ class ForecastJobStore(Protocol):
         limit: int,
         status: ForecastJobStatus | None = None,
     ) -> list[ForecastJob]: ...
+
+    async def delete_older_than(
+        self,
+        *,
+        cutoff: datetime,
+        statuses: set[ForecastJobTerminalStatus],
+    ) -> int: ...
 
 
 class DiagnosticForecastProvider(Protocol):
@@ -60,23 +88,19 @@ class InMemoryForecastJobStore:
         self._jobs: dict[str, ForecastJob] = {}
         self._lock = asyncio.Lock()
 
-    async def create(self, *, latitude: float, longitude: float) -> ForecastJob:
-        now = datetime.now(UTC)
-        job = ForecastJob(
-            id=str(uuid4()),
-            status="queued",
+    async def create(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        parent_job_id: str | None = None,
+        attempt: int = 1,
+    ) -> ForecastJob:
+        job = _build_new_job(
             latitude=latitude,
             longitude=longitude,
-            created_at=now,
-            updated_at=now,
-            diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
-            events=[
-                ForecastJobEvent(
-                    occurred_at=now,
-                    status="queued",
-                    message="Forecast job accepted.",
-                )
-            ],
+            parent_job_id=parent_job_id,
+            attempt=attempt,
         )
         async with self._lock:
             self._jobs[job.id] = job
@@ -107,6 +131,22 @@ class InMemoryForecastJobStore:
             jobs = list(self._jobs.values())
         return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
 
+    async def delete_older_than(
+        self,
+        *,
+        cutoff: datetime,
+        statuses: set[ForecastJobTerminalStatus],
+    ) -> int:
+        async with self._lock:
+            job_ids = [
+                job.id
+                for job in self._jobs.values()
+                if _is_cleanup_candidate(job=job, cutoff=cutoff, statuses=statuses)
+            ]
+            for job_id in job_ids:
+                del self._jobs[job_id]
+        return len(job_ids)
+
 
 class FileForecastJobStore:
     """Filesystem-backed job store for local hosted-result observation.
@@ -120,23 +160,19 @@ class FileForecastJobStore:
         self.root = Path(root)
         self._lock = asyncio.Lock()
 
-    async def create(self, *, latitude: float, longitude: float) -> ForecastJob:
-        now = datetime.now(UTC)
-        job = ForecastJob(
-            id=str(uuid4()),
-            status="queued",
+    async def create(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        parent_job_id: str | None = None,
+        attempt: int = 1,
+    ) -> ForecastJob:
+        job = _build_new_job(
             latitude=latitude,
             longitude=longitude,
-            created_at=now,
-            updated_at=now,
-            diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
-            events=[
-                ForecastJobEvent(
-                    occurred_at=now,
-                    status="queued",
-                    message="Forecast job accepted.",
-                )
-            ],
+            parent_job_id=parent_job_id,
+            attempt=attempt,
         )
         async with self._lock:
             self._write(job)
@@ -173,6 +209,30 @@ class FileForecastJobStore:
                         continue
         return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
 
+    async def delete_older_than(
+        self,
+        *,
+        cutoff: datetime,
+        statuses: set[ForecastJobTerminalStatus],
+    ) -> int:
+        deleted_count = 0
+        async with self._lock:
+            if not self.root.exists():
+                return 0
+
+            for path in self.root.glob("*.json"):
+                try:
+                    job = ForecastJob.model_validate_json(path.read_text("utf-8"))
+                except ValueError:
+                    continue
+
+                if not _is_cleanup_candidate(job=job, cutoff=cutoff, statuses=statuses):
+                    continue
+
+                path.unlink()
+                deleted_count += 1
+        return deleted_count
+
     def _path(self, job_id: str) -> Path:
         return self.root / f"{job_id}.json"
 
@@ -193,9 +253,11 @@ class ForecastJobService:
         *,
         provider: ForecastProvider,
         store: ForecastJobStore | None = None,
+        default_retention_hours: int = 168,
     ) -> None:
         self.provider = provider
         self.store = store or InMemoryForecastJobStore()
+        self.default_retention_hours = default_retention_hours
 
     async def create_job(self, *, latitude: float, longitude: float) -> ForecastJob:
         return self._with_links(await self.store.create(latitude=latitude, longitude=longitude))
@@ -213,8 +275,70 @@ class ForecastJobService:
         summaries = [self._to_summary(self._with_links(job)) for job in jobs]
         return ForecastJobListResponse(count=len(summaries), jobs=summaries)
 
+    async def poll_job(self, job_id: str) -> ForecastJobPollResponse:
+        return self._to_poll_response(self._with_links(await self.store.get(job_id)))
+
+    async def cancel_job(self, job_id: str) -> ForecastJob:
+        job = await self.store.get(job_id)
+        if job.status in TERMINAL_JOB_STATUSES:
+            raise ForecastJobConflictError(f"Cannot cancel a {job.status} forecast job.")
+
+        now = datetime.now(UTC)
+        cancelled = self._append_event(
+            job.model_copy(
+                update={
+                    "status": "cancelled",
+                    "completed_at": now,
+                    "diagnostics": ForecastJobDiagnostics(
+                        provider=job.diagnostics.provider if job.diagnostics else None,
+                        message="Forecast job cancelled by request.",
+                    ),
+                    "error": None,
+                }
+            ),
+            status="cancelled",
+            message="Forecast job cancelled by request.",
+            occurred_at=now,
+        )
+        return self._with_links(await self.store.update(cancelled))
+
+    async def retry_job(self, job_id: str) -> ForecastJob:
+        source = await self.store.get(job_id)
+        if source.status not in TERMINAL_JOB_STATUSES:
+            raise ForecastJobConflictError(f"Cannot retry a {source.status} forecast job.")
+
+        retry = await self.store.create(
+            latitude=source.latitude,
+            longitude=source.longitude,
+            parent_job_id=source.id,
+            attempt=source.attempt + 1,
+        )
+        return self._with_links(retry)
+
+    async def cleanup_jobs(
+        self,
+        *,
+        older_than_hours: int | None = None,
+        statuses: list[ForecastJobTerminalStatus] | None = None,
+    ) -> ForecastJobCleanupResponse:
+        retention_hours = older_than_hours or self.default_retention_hours
+        cleanup_statuses = set(statuses or sorted(TERMINAL_JOB_STATUSES))
+        cutoff = datetime.now(UTC) - timedelta(hours=retention_hours)
+        deleted_count = await self.store.delete_older_than(
+            cutoff=cutoff,
+            statuses=cleanup_statuses,
+        )
+        return ForecastJobCleanupResponse(
+            deleted_count=deleted_count,
+            cutoff=cutoff,
+            statuses=sorted(cleanup_statuses),
+        )
+
     async def run_job(self, job_id: str) -> None:
         job = await self.store.get(job_id)
+        if job.status != "queued":
+            return
+
         now = datetime.now(UTC)
         running_job = self._append_event(
             job.model_copy(
@@ -243,6 +367,9 @@ class ForecastJobService:
         else:
             completed = datetime.now(UTC)
             current = await self.store.get(job_id)
+            if current.status == "cancelled":
+                return
+
             await self.store.update(
                 self._append_event(
                     current.model_copy(
@@ -284,18 +411,23 @@ class ForecastJobService:
 
     async def _mark_failed(self, *, job_id: str, error: str) -> None:
         job = await self.store.get(job_id)
+        if job.status == "cancelled":
+            return
+
+        failed_at = datetime.now(UTC)
         await self.store.update(
             self._append_event(
                 job.model_copy(
                     update={
                         "status": "failed",
-                        "completed_at": datetime.now(UTC),
+                        "completed_at": failed_at,
                         "error": error,
                         "diagnostics": ForecastJobDiagnostics(message="Forecast job failed."),
                     }
                 ),
                 status="failed",
                 message="Forecast job failed.",
+                occurred_at=failed_at,
             )
         )
 
@@ -304,10 +436,13 @@ class ForecastJobService:
             update={
                 "links": {
                     "self": f"/api/v1/forecast/jobs/{job.id}",
+                    "poll": f"/api/v1/forecast/jobs/{job.id}/poll",
                     "point_forecast": (
                         "/api/v1/forecast/point"
                         f"?latitude={job.latitude}&longitude={job.longitude}"
                     ),
+                    "retry": f"/api/v1/forecast/jobs/{job.id}/retry",
+                    "cancel": f"/api/v1/forecast/jobs/{job.id}/cancel",
                 }
             }
         )
@@ -339,11 +474,27 @@ class ForecastJobService:
             status=job.status,
             latitude=job.latitude,
             longitude=job.longitude,
+            parent_job_id=job.parent_job_id,
+            attempt=job.attempt,
             created_at=job.created_at,
             updated_at=job.updated_at,
             completed_at=job.completed_at,
             diagnostics=job.diagnostics,
             error=job.error,
+            links=job.links,
+        )
+
+    def _to_poll_response(self, job: ForecastJob) -> ForecastJobPollResponse:
+        terminal = job.status in TERMINAL_JOB_STATUSES
+        return ForecastJobPollResponse(
+            id=job.id,
+            status=job.status,
+            terminal=terminal,
+            forecast_ready=job.forecast is not None,
+            updated_at=job.updated_at,
+            retry_after_seconds=None if terminal else 2,
+            event_count=len(job.events),
+            latest_event=job.events[-1] if job.events else None,
             links=job.links,
         )
 
@@ -357,3 +508,44 @@ def _sort_and_filter_jobs(
     filtered = [job for job in jobs if status is None or job.status == status]
     filtered.sort(key=lambda job: (job.created_at, job.id), reverse=True)
     return filtered[:limit]
+
+
+def _build_new_job(
+    *,
+    latitude: float,
+    longitude: float,
+    parent_job_id: str | None,
+    attempt: int,
+) -> ForecastJob:
+    now = datetime.now(UTC)
+    message = "Forecast retry accepted." if parent_job_id else "Forecast job accepted."
+    return ForecastJob(
+        id=str(uuid4()),
+        status="queued",
+        latitude=latitude,
+        longitude=longitude,
+        parent_job_id=parent_job_id,
+        attempt=attempt,
+        created_at=now,
+        updated_at=now,
+        diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
+        events=[
+            ForecastJobEvent(
+                occurred_at=now,
+                status="queued",
+                message=message,
+            )
+        ],
+    )
+
+
+def _is_cleanup_candidate(
+    *,
+    job: ForecastJob,
+    cutoff: datetime,
+    statuses: set[ForecastJobTerminalStatus],
+) -> bool:
+    if job.status not in statuses:
+        return False
+    reference_time = job.completed_at or job.updated_at
+    return reference_time < cutoff

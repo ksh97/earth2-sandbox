@@ -1,15 +1,21 @@
 import tarfile
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 import httpx
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
 from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
-from earth2_sandbox.providers import FourCastNetForecastProvider
-from earth2_sandbox.services import FileForecastJobStore
+from earth2_sandbox.providers import FourCastNetForecastProvider, MockForecastProvider
+from earth2_sandbox.services import (
+    FileForecastJobStore,
+    ForecastJobConflictError,
+    ForecastJobService,
+)
 
 
 def test_fourcastnet_job_exposes_asset_and_cache_diagnostics(tmp_path) -> None:
@@ -155,6 +161,70 @@ def test_file_forecast_job_store_lists_recent_jobs(tmp_path) -> None:
 
     assert [job.latitude for job in all_jobs] == [35.6762, 37.5665]
     assert [job.id for job in failed_jobs] == [all_jobs[1].id]
+
+
+def test_forecast_job_service_cancels_queued_job() -> None:
+    import asyncio
+
+    async def scenario():
+        service = ForecastJobService(provider=MockForecastProvider())
+        job = await service.create_job(latitude=37.5665, longitude=126.9780)
+        cancelled = await service.cancel_job(job.id)
+        await service.run_job(job.id)
+        loaded = await service.get_job(job.id)
+        return cancelled, loaded
+
+    cancelled, loaded = asyncio.run(scenario())
+
+    assert cancelled.status == "cancelled"
+    assert loaded.status == "cancelled"
+    assert loaded.forecast is None
+    assert [event.status for event in loaded.events] == ["queued", "cancelled"]
+
+
+def test_forecast_job_service_rejects_retry_for_active_job() -> None:
+    import asyncio
+
+    async def scenario():
+        service = ForecastJobService(provider=MockForecastProvider())
+        job = await service.create_job(latitude=37.5665, longitude=126.9780)
+        with pytest.raises(ForecastJobConflictError):
+            await service.retry_job(job.id)
+
+    asyncio.run(scenario())
+
+
+def test_file_forecast_job_store_cleans_up_old_terminal_jobs(tmp_path) -> None:
+    import asyncio
+
+    async def scenario():
+        store = FileForecastJobStore(tmp_path)
+        service = ForecastJobService(provider=MockForecastProvider(), store=store)
+        old_job = await store.create(latitude=37.5665, longitude=126.9780)
+        fresh_job = await store.create(latitude=35.6762, longitude=139.6503)
+
+        old_time = datetime.now(UTC) - timedelta(hours=200)
+        old_terminal = old_job.model_copy(
+            update={
+                "status": "succeeded",
+                "updated_at": old_time,
+                "completed_at": old_time,
+            }
+        )
+        (tmp_path / f"{old_job.id}.json").write_text(
+            old_terminal.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+        await store.update(fresh_job.model_copy(update={"status": "succeeded"}))
+
+        cleanup = await service.cleanup_jobs(older_than_hours=168)
+        remaining = await store.list_recent(limit=10)
+        return cleanup, remaining
+
+    cleanup, remaining = asyncio.run(scenario())
+
+    assert cleanup.deleted_count == 1
+    assert [job.latitude for job in remaining] == [35.6762]
 
 
 def _build_tar_bytes(entries: dict[str, np.ndarray]) -> bytes:
