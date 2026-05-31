@@ -27,6 +27,30 @@ class ForecastJobDiagnostics(BaseModel):
     message: str | None = None
 
 
+class ForecastJobEvent(BaseModel):
+    occurred_at: datetime
+    status: ForecastJobStatus
+    message: str
+
+
+class ForecastJobSummary(BaseModel):
+    id: str
+    status: ForecastJobStatus
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    diagnostics: ForecastJobDiagnostics | None = None
+    error: str | None = None
+    links: dict[str, str] = Field(default_factory=dict)
+
+
+class ForecastJobListResponse(BaseModel):
+    count: int
+    jobs: list[ForecastJobSummary]
+
+
 class ForecastJob(BaseModel):
     id: str
     status: ForecastJobStatus
@@ -38,5 +62,6 @@ class ForecastJob(BaseModel):
     completed_at: datetime | None = None
     forecast: ForecastSummary | None = None
     diagnostics: ForecastJobDiagnostics | None = None
+    events: list[ForecastJobEvent] = Field(default_factory=list)
     error: str | None = None
     links: dict[str, str] = Field(default_factory=dict)

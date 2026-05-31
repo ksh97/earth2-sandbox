@@ -58,6 +58,7 @@ def test_fourcastnet_job_exposes_asset_and_cache_diagnostics(tmp_path) -> None:
 
     assert job["status"] == "succeeded"
     assert job["forecast"]["provider"] == "fourcastnet"
+    assert [event["status"] for event in job["events"]] == ["queued", "running", "succeeded"]
     assert job["diagnostics"]["provider"] == "fourcastnet"
     assert job["diagnostics"]["response_source"] == "inline"
     assert job["diagnostics"]["cache_status"] == "disabled"
@@ -88,6 +89,7 @@ def test_forecast_job_records_provider_failures() -> None:
     job = api_client.get(response.json()["links"]["self"]).json()
 
     assert job["status"] == "failed"
+    assert [event["status"] for event in job["events"]] == ["queued", "running", "failed"]
     assert "Unexpected forecast job error" in job["error"]
 
 
@@ -105,6 +107,7 @@ def test_file_forecast_job_store_persists_job_state(tmp_path) -> None:
     loaded = asyncio.run(scenario())
 
     assert loaded.status == "running"
+    assert [event.status for event in loaded.events] == ["queued"]
     assert loaded.latitude == 37.5665
     assert loaded.longitude == 126.9780
     assert (tmp_path / f"{loaded.id}.json").exists()
@@ -130,7 +133,28 @@ def test_api_can_use_file_backed_job_store(tmp_path) -> None:
     job = api_client.get(response.json()["links"]["self"]).json()
     assert job["status"] == "succeeded"
     assert job["forecast"]["provider"] == "mock"
+    assert [event["status"] for event in job["events"]] == ["queued", "running", "succeeded"]
     assert (tmp_path / f"{job['id']}.json").exists()
+
+    list_response = api_client.get("/api/v1/forecast/jobs", params={"limit": 5})
+    assert list_response.status_code == 200
+    assert list_response.json()["jobs"][0]["id"] == job["id"]
+
+
+def test_file_forecast_job_store_lists_recent_jobs(tmp_path) -> None:
+    import asyncio
+
+    async def scenario():
+        store = FileForecastJobStore(tmp_path)
+        first = await store.create(latitude=37.5665, longitude=126.9780)
+        await store.create(latitude=35.6762, longitude=139.6503)
+        await store.update(first.model_copy(update={"status": "failed"}))
+        return await store.list_recent(limit=10), await store.list_recent(limit=10, status="failed")
+
+    all_jobs, failed_jobs = asyncio.run(scenario())
+
+    assert [job.latitude for job in all_jobs] == [35.6762, 37.5665]
+    assert [job.id for job in failed_jobs] == [all_jobs[1].id]
 
 
 def _build_tar_bytes(entries: dict[str, np.ndarray]) -> bytes:

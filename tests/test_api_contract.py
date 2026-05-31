@@ -78,6 +78,7 @@ def test_forecast_job_contract() -> None:
     assert body["latitude"] == 37.5665
     assert body["longitude"] == 126.9780
     assert body["forecast"] is None
+    assert [event["status"] for event in body["events"]] == ["queued"]
     assert body["links"]["self"].startswith("/api/v1/forecast/jobs/")
 
     job_response = client.get(body["links"]["self"])
@@ -89,6 +90,31 @@ def test_forecast_job_contract() -> None:
     assert job["forecast"]["provider"] == "mock"
     assert job["diagnostics"]["provider"] == "mock"
     assert job["diagnostics"]["message"] == "Forecast summary is ready."
+    assert [event["status"] for event in job["events"]] == ["queued", "running", "succeeded"]
+
+
+def test_forecast_jobs_list_contract() -> None:
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 35.6762, "longitude": 139.6503},
+    )
+    created = response.json()
+
+    list_response = client.get("/api/v1/forecast/jobs", params={"limit": 1})
+
+    assert list_response.status_code == 200
+    body = list_response.json()
+    assert body["count"] == 1
+    assert body["jobs"][0]["id"] == created["id"]
+    assert body["jobs"][0]["links"]["self"] == created["links"]["self"]
+    assert "forecast" not in body["jobs"][0]
+
+
+def test_forecast_jobs_list_filters_by_status() -> None:
+    response = client.get("/api/v1/forecast/jobs", params={"status": "failed"})
+
+    assert response.status_code == 200
+    assert response.json()["jobs"] == []
 
 
 def test_forecast_job_missing_id_returns_404() -> None:
