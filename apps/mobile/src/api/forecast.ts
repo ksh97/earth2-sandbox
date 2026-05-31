@@ -64,6 +64,58 @@ export type ForecastProviderStatus = {
   detail: string;
 };
 
+export type ForecastJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export type ForecastJobDiagnostics = {
+  provider: string | null;
+  response_source: string | null;
+  cache_status: string | null;
+  cached_tar_path: string | null;
+  nvcf_request_id: string | null;
+  nvcf_status: string | null;
+  poll_attempts: number;
+  response_reference_present: boolean;
+  byte_length: number | null;
+  sha256: string | null;
+  message: string | null;
+};
+
+export type ForecastJobEvent = {
+  occurred_at: string;
+  status: ForecastJobStatus;
+  message: string;
+};
+
+export type ForecastJob = {
+  id: string;
+  status: ForecastJobStatus;
+  latitude: number;
+  longitude: number;
+  parent_job_id: string | null;
+  attempt: number;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  forecast: ForecastSummary | null;
+  diagnostics: ForecastJobDiagnostics | null;
+  events: ForecastJobEvent[];
+  error: string | null;
+  links: Record<string, string>;
+};
+
+export type ForecastJobPollResponse = {
+  id: string;
+  status: ForecastJobStatus;
+  terminal: boolean;
+  forecast_ready: boolean;
+  updated_at: string;
+  retry_after_seconds: number | null;
+  event_count: number;
+  latest_event: ForecastJobEvent | null;
+  links: Record<string, string>;
+};
+
 type ForecastRequest = {
   latitude: number;
   longitude: number;
@@ -101,6 +153,50 @@ export async function fetchForecastProviderStatus(): Promise<ForecastProviderSta
   }
 
   return parseForecastProviderStatus(await readJson(response, "Provider status API"));
+}
+
+export async function createForecastJob(request: ForecastRequest): Promise<ForecastJob> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/jobs`, {
+    body: JSON.stringify(request),
+    headers: {
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await formatApiError(response, "Forecast job API"));
+  }
+
+  return parseForecastJob(await readJson(response, "Forecast job API"));
+}
+
+export async function fetchForecastJob(pathOrUrl: string): Promise<ForecastJob> {
+  const response = await fetch(buildApiUrl(pathOrUrl));
+
+  if (!response.ok) {
+    throw new Error(await formatApiError(response, "Forecast job API"));
+  }
+
+  return parseForecastJob(await readJson(response, "Forecast job API"));
+}
+
+export async function pollForecastJob(pathOrUrl: string): Promise<ForecastJobPollResponse> {
+  const response = await fetch(buildApiUrl(pathOrUrl));
+
+  if (!response.ok) {
+    throw new Error(await formatApiError(response, "Forecast job poll API"));
+  }
+
+  return parseForecastJobPollResponse(await readJson(response, "Forecast job poll API"));
+}
+
+function buildApiUrl(pathOrUrl: string) {
+  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) {
+    return pathOrUrl;
+  }
+
+  return `${apiBaseUrl}${pathOrUrl}`;
 }
 
 async function readJson(response: Response, label: string): Promise<unknown> {
@@ -158,6 +254,22 @@ function parseForecastProviderStatus(payload: unknown): ForecastProviderStatus {
   return payload;
 }
 
+function parseForecastJob(payload: unknown): ForecastJob {
+  if (!isForecastJob(payload)) {
+    throw new Error("Forecast job API returned an unexpected payload.");
+  }
+
+  return payload;
+}
+
+function parseForecastJobPollResponse(payload: unknown): ForecastJobPollResponse {
+  if (!isForecastJobPollResponse(payload)) {
+    throw new Error("Forecast job poll API returned an unexpected payload.");
+  }
+
+  return payload;
+}
+
 function isForecastSummary(value: unknown): value is ForecastSummary {
   return (
     isRecord(value) &&
@@ -174,6 +286,79 @@ function isForecastSummary(value: unknown): value is ForecastSummary {
     value.timeline.every(isForecastTimelineStep) &&
     Array.isArray(value.signals) &&
     value.signals.every(isForecastSignal)
+  );
+}
+
+function isForecastJob(value: unknown): value is ForecastJob {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isForecastJobStatus(value.status) &&
+    typeof value.latitude === "number" &&
+    typeof value.longitude === "number" &&
+    (typeof value.parent_job_id === "string" || value.parent_job_id === null) &&
+    typeof value.attempt === "number" &&
+    typeof value.created_at === "string" &&
+    typeof value.updated_at === "string" &&
+    (typeof value.started_at === "string" || value.started_at === null) &&
+    (typeof value.completed_at === "string" || value.completed_at === null) &&
+    (isForecastSummary(value.forecast) || value.forecast === null) &&
+    (isForecastJobDiagnostics(value.diagnostics) || value.diagnostics === null) &&
+    Array.isArray(value.events) &&
+    value.events.every(isForecastJobEvent) &&
+    (typeof value.error === "string" || value.error === null) &&
+    isStringRecord(value.links)
+  );
+}
+
+function isForecastJobPollResponse(value: unknown): value is ForecastJobPollResponse {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isForecastJobStatus(value.status) &&
+    typeof value.terminal === "boolean" &&
+    typeof value.forecast_ready === "boolean" &&
+    typeof value.updated_at === "string" &&
+    (typeof value.retry_after_seconds === "number" || value.retry_after_seconds === null) &&
+    typeof value.event_count === "number" &&
+    (isForecastJobEvent(value.latest_event) || value.latest_event === null) &&
+    isStringRecord(value.links)
+  );
+}
+
+function isForecastJobDiagnostics(value: unknown): value is ForecastJobDiagnostics {
+  return (
+    isRecord(value) &&
+    (typeof value.provider === "string" || value.provider === null) &&
+    (typeof value.response_source === "string" || value.response_source === null) &&
+    (typeof value.cache_status === "string" || value.cache_status === null) &&
+    (typeof value.cached_tar_path === "string" || value.cached_tar_path === null) &&
+    (typeof value.nvcf_request_id === "string" || value.nvcf_request_id === null) &&
+    (typeof value.nvcf_status === "string" || value.nvcf_status === null) &&
+    typeof value.poll_attempts === "number" &&
+    typeof value.response_reference_present === "boolean" &&
+    (typeof value.byte_length === "number" || value.byte_length === null) &&
+    (typeof value.sha256 === "string" || value.sha256 === null) &&
+    (typeof value.message === "string" || value.message === null)
+  );
+}
+
+function isForecastJobEvent(value: unknown): value is ForecastJobEvent {
+  return (
+    isRecord(value) &&
+    typeof value.occurred_at === "string" &&
+    isForecastJobStatus(value.status) &&
+    typeof value.message === "string"
+  );
+}
+
+function isForecastJobStatus(value: unknown): value is ForecastJobStatus {
+  return (
+    value === "queued" ||
+    value === "running" ||
+    value === "succeeded" ||
+    value === "failed" ||
+    value === "cancelled"
   );
 }
 
@@ -259,4 +444,11 @@ function isSignalLevel(value: unknown): value is ForecastSignal["level"] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
 }
