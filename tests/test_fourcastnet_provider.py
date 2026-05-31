@@ -10,8 +10,15 @@ from earth2_sandbox.app import create_app
 from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
 from earth2_sandbox.providers import FourCastNetForecastProvider, build_forecast_provider
-from earth2_sandbox.schemas.fourcastnet import FourCastNetHostedInferenceRequest
+from earth2_sandbox.schemas.fourcastnet import (
+    FourCastNetHostedInferenceRequest,
+    FourCastNetHostedInferenceResult,
+)
 from earth2_sandbox.storage import FourCastNetResultCache
+from tests.fourcastnet_fixtures import (
+    HOSTED_POINT_FIXTURE_SHA256,
+    load_hosted_point_fixture,
+)
 
 
 def test_self_hosted_fourcastnet_readiness_uses_ready_endpoint() -> None:
@@ -407,6 +414,61 @@ def test_fourcastnet_diagnostics_expose_cache_artifact_id_not_path(tmp_path) -> 
     assert result.diagnostics["cache_status"] == "stored"
     assert result.diagnostics["cached_artifact_id"]
     assert "cached_tar_path" not in result.diagnostics
+
+
+def test_fourcastnet_provider_replays_hosted_fixture_from_cache(tmp_path) -> None:
+    content = load_hosted_point_fixture()
+    request = FourCastNetHostedInferenceRequest()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError(f"Cache hit should avoid hosted request: {request.url}")
+
+    client = FourCastNetNimClient(
+        base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+        mode="hosted",
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+    request_payload = client.build_hosted_inference_payload(
+        input_id=request.input_id,
+        variables=request.variables,
+        simulation_length=request.simulation_length,
+        ensemble_size=request.ensemble_size,
+        noise_amplitude=request.noise_amplitude,
+    )
+    cache = FourCastNetResultCache(tmp_path)
+    record = cache.save(
+        request_payload=request_payload,
+        accept=request.accept,
+        result=FourCastNetHostedInferenceResult(
+            endpoint=client.base_url,
+            status_code=200,
+            content_type="application/x-tar",
+            byte_length=len(content),
+            sha256=HOSTED_POINT_FIXTURE_SHA256,
+            request_payload=request_payload,
+            response_source="response_reference",
+            response_reference_present=True,
+            nvcf_request_id="fixture-request-id",
+            nvcf_status="fulfilled",
+            raw_content=content,
+        ),
+    )
+    assert record is not None
+
+    provider = FourCastNetForecastProvider(client=client, result_cache=cache)
+
+    result = asyncio.run(provider.get_point_forecast_with_diagnostics(latitude=0, longitude=90))
+
+    assert result.summary.provider == "fourcastnet"
+    assert result.summary.forecast_window.lead_hours == [0, 6, 12]
+    assert result.summary.timeline[0].temperature_c == 19.0
+    assert result.summary.timeline[2].condition == "rain_watch"
+    assert result.diagnostics["response_source"] == "cache"
+    assert result.diagnostics["cache_status"] == "hit"
+    assert result.diagnostics["cached_artifact_id"] == record.key
+    assert result.diagnostics["byte_length"] == len(content)
+    assert result.diagnostics["sha256"] == HOSTED_POINT_FIXTURE_SHA256
 
 
 def test_hosted_inference_route_returns_adapter_result() -> None:

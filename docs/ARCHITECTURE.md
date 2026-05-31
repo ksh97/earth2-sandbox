@@ -101,6 +101,11 @@ payload and requested content type, not from API keys or presigned URLs. This al
 forecast development to be replayed from local tar files without repeatedly calling hosted
 inference.
 
+Post-processing tests use a compact hosted-style tar fixture under
+`tests/fixtures/fourcastnet`. It preserves NVIDIA member naming and tensor layout while
+keeping the committed file small; real hosted tar outputs belong in the local cache/data
+directories and must not be committed.
+
 The hosted API may still return a small JSON marker such as `{"message": "Large asset written"}`
 without a downloadable `Location` or `responseReference`. The backend records the NVCF request id,
 status, polling count, and response source for diagnostics, but point sampling still requires
