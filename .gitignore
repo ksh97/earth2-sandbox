@@ -39,6 +39,10 @@ logs/
 .vscode/
 .idea/
 
+# Local Codex artifacts
+.codex_video_frames/
+patches/
+
 # Mobile app
 apps/mobile/node_modules/
 apps/mobile/.expo/

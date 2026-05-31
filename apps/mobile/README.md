@@ -1,6 +1,6 @@
 # Earth-2 Mobile Prototype
 
-This is the first Expo mobile prototype for the Earth-2 weather forecast app. It calls the FastAPI backend mock forecast endpoint so the iOS and Android UI can evolve before FourCastNet NIM integration is ready.
+This is the first Expo mobile prototype for the Earth-2 weather forecast app. It calls the FastAPI backend point forecast endpoint so the iOS and Android UI can evolve before FourCastNet NIM integration is ready.
 
 ## Requirements
 

@@ -74,7 +74,8 @@ python -m uvicorn earth2_sandbox.main:app --reload
 
 - API 상태: http://127.0.0.1:8000/health
 - 예보 provider 상태: http://127.0.0.1:8000/api/v1/forecast/provider/status
-- 예시 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
+- 점 예보: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
+- 예전 prototype 호환 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
 
 Hosted NVIDIA API 실험을 할 때는 `.env`에서 다음 값을 설정한 뒤 서버를 재시작합니다.
@@ -93,7 +94,7 @@ EARTH2_NVIDIA_API_KEY=your_nvidia_api_key
 
 `EARTH2_FORECAST_PROVIDER=fourcastnet`와 hosted API key가 설정되어 있으면 기존 sample forecast 엔드포인트도 hosted FourCastNet tar 결과를 호출한 뒤 특정 위도/경도에 가장 가까운 격자점을 샘플링하여 `ForecastSummary` 형태로 반환합니다.
 
-- Point forecast sample: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
+- Point forecast: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
 
 실제 NVIDIA API key는 `.env`에만 저장하고 GitHub에는 올리지 않습니다. 샘플 tar 응답 파일을 받은 경우에도 `data/` 아래 로컬 파일로만 보관하고 커밋하지 않습니다.
 
