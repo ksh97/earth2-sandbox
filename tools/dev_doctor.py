@@ -145,6 +145,17 @@ def check_env_files(doctor: Doctor) -> None:
     if not _is_under(resolved_cache_dir, REPO_ROOT):
         doctor.warn("backend env", "FourCastNet cache dir is outside the repository workspace.")
 
+    job_store_backend = root_env.get("EARTH2_FORECAST_JOB_STORE_BACKEND", "memory")
+    job_store_dir = root_env.get("EARTH2_FORECAST_JOB_STORE_DIR", "./data/jobs")
+    doctor.ok("backend env", f"EARTH2_FORECAST_JOB_STORE_BACKEND={job_store_backend}")
+    doctor.ok("backend env", f"EARTH2_FORECAST_JOB_STORE_DIR={job_store_dir}")
+    if Path(job_store_dir).is_absolute():
+        resolved_job_store_dir = Path(job_store_dir)
+    else:
+        resolved_job_store_dir = REPO_ROOT / job_store_dir
+    if not _is_under(resolved_job_store_dir, REPO_ROOT):
+        doctor.warn("backend env", "Forecast job store dir is outside the repository workspace.")
+
     mobile_api = mobile_env.get("EXPO_PUBLIC_API_BASE_URL")
     if mobile_api:
         doctor.ok("mobile env", f"EXPO_PUBLIC_API_BASE_URL={mobile_api}")

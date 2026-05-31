@@ -9,6 +9,7 @@ from earth2_sandbox.app import create_app
 from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
 from earth2_sandbox.providers import FourCastNetForecastProvider
+from earth2_sandbox.services import FileForecastJobStore
 
 
 def test_fourcastnet_job_exposes_asset_and_cache_diagnostics(tmp_path) -> None:
@@ -88,6 +89,48 @@ def test_forecast_job_records_provider_failures() -> None:
 
     assert job["status"] == "failed"
     assert "Unexpected forecast job error" in job["error"]
+
+
+def test_file_forecast_job_store_persists_job_state(tmp_path) -> None:
+    import asyncio
+
+    async def scenario():
+        first_store = FileForecastJobStore(tmp_path)
+        job = await first_store.create(latitude=37.5665, longitude=126.9780)
+        await first_store.update(job.model_copy(update={"status": "running"}))
+
+        second_store = FileForecastJobStore(tmp_path)
+        return await second_store.get(job.id)
+
+    loaded = asyncio.run(scenario())
+
+    assert loaded.status == "running"
+    assert loaded.latitude == 37.5665
+    assert loaded.longitude == 126.9780
+    assert (tmp_path / f"{loaded.id}.json").exists()
+
+
+def test_api_can_use_file_backed_job_store(tmp_path) -> None:
+    api_client = TestClient(
+        create_app(
+            settings=Settings(
+                forecast_provider="mock",
+                forecast_job_store_backend="file",
+                forecast_job_store_dir=str(tmp_path),
+            )
+        )
+    )
+
+    response = api_client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+
+    assert response.status_code == 202
+    job = api_client.get(response.json()["links"]["self"]).json()
+    assert job["status"] == "succeeded"
+    assert job["forecast"]["provider"] == "mock"
+    assert (tmp_path / f"{job['id']}.json").exists()
 
 
 def _build_tar_bytes(entries: dict[str, np.ndarray]) -> bytes:

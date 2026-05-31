@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ForecastProviderName = Literal["mock", "fourcastnet"]
 FourCastNetEndpointMode = Literal["self_hosted", "hosted"]
+ForecastJobStoreBackend = Literal["memory", "file"]
 
 
 class Settings(BaseSettings):
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
     nvcf_poll_interval_seconds: float = 1
     fourcastnet_cache_enabled: bool = True
     fourcastnet_cache_dir: str = "./data/cache/fourcastnet"
+    forecast_job_store_backend: ForecastJobStoreBackend = "memory"
+    forecast_job_store_dir: str = "./data/jobs"
 
 
 @lru_cache

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
@@ -15,6 +16,14 @@ from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics
 
 class ForecastJobNotFoundError(KeyError):
     """Raised when a forecast job id is unknown to the configured job store."""
+
+
+class ForecastJobStore(Protocol):
+    async def create(self, *, latitude: float, longitude: float) -> ForecastJob: ...
+
+    async def get(self, job_id: str) -> ForecastJob: ...
+
+    async def update(self, job: ForecastJob) -> ForecastJob: ...
 
 
 class DiagnosticForecastProvider(Protocol):
@@ -68,12 +77,68 @@ class InMemoryForecastJobStore:
         return next_job
 
 
+class FileForecastJobStore:
+    """Filesystem-backed job store for local hosted-result observation.
+
+    Jobs are stored as one JSON file per job id. This is intentionally simple:
+    it preserves diagnostics across backend restarts without introducing Redis
+    or a database before the job contract settles.
+    """
+
+    def __init__(self, root: str | Path) -> None:
+        self.root = Path(root)
+        self._lock = asyncio.Lock()
+
+    async def create(self, *, latitude: float, longitude: float) -> ForecastJob:
+        now = datetime.now(UTC)
+        job = ForecastJob(
+            id=str(uuid4()),
+            status="queued",
+            latitude=latitude,
+            longitude=longitude,
+            created_at=now,
+            updated_at=now,
+            diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
+        )
+        async with self._lock:
+            self._write(job)
+        return job
+
+    async def get(self, job_id: str) -> ForecastJob:
+        async with self._lock:
+            path = self._path(job_id)
+            if not path.exists():
+                raise ForecastJobNotFoundError(job_id)
+            return ForecastJob.model_validate_json(path.read_text(encoding="utf-8"))
+
+    async def update(self, job: ForecastJob) -> ForecastJob:
+        next_job = job.model_copy(update={"updated_at": datetime.now(UTC)})
+        async with self._lock:
+            if not self._path(next_job.id).exists():
+                raise ForecastJobNotFoundError(next_job.id)
+            self._write(next_job)
+        return next_job
+
+    def _path(self, job_id: str) -> Path:
+        return self.root / f"{job_id}.json"
+
+    def _write(self, job: ForecastJob) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        target = self._path(job.id)
+        temporary = target.with_suffix(".json.tmp")
+        temporary.write_text(
+            job.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+        temporary.replace(target)
+
+
 class ForecastJobService:
     def __init__(
         self,
         *,
         provider: ForecastProvider,
-        store: InMemoryForecastJobStore | None = None,
+        store: ForecastJobStore | None = None,
     ) -> None:
         self.provider = provider
         self.store = store or InMemoryForecastJobStore()
