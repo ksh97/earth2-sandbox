@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     forecast_job_store_backend: ForecastJobStoreBackend = "memory"
     forecast_job_store_dir: str = "./data/jobs"
     forecast_job_retention_hours: int = 168
+    forecast_job_stale_timeout_seconds: int = 1800
 
 
 @lru_cache

@@ -288,6 +288,96 @@ def test_forecast_job_service_does_not_overwrite_concurrent_cancel() -> None:
     assert [event.status for event in loaded.events] == ["queued", "running", "cancelled"]
 
 
+def test_forecast_job_service_recovers_interrupted_active_jobs(tmp_path) -> None:
+    import asyncio
+
+    class RecordingWorker:
+        def __init__(self) -> None:
+            self.job_ids: list[str] = []
+
+        def enqueue(self, job_id: str) -> None:
+            self.job_ids.append(job_id)
+
+    async def scenario():
+        store = FileForecastJobStore(tmp_path)
+        service = ForecastJobService(
+            provider=MockForecastProvider(),
+            store=store,
+            default_stale_timeout_seconds=3600,
+        )
+        queued = await store.create(latitude=37.5665, longitude=126.9780)
+        running = await store.create(latitude=35.6762, longitude=139.6503)
+        await store.update_if_status(
+            running.model_copy(update={"status": "running"}),
+            expected_statuses={"queued"},
+        )
+        worker = RecordingWorker()
+
+        report = await service.recover_interrupted_jobs(worker=worker)
+        loaded_running = await store.get(running.id)
+        return report, worker.job_ids, queued, loaded_running
+
+    report, job_ids, queued, loaded_running = asyncio.run(scenario())
+
+    assert report.scanned_count == 2
+    assert report.requeued_count == 2
+    assert report.timed_out_count == 0
+    assert set(job_ids) == {queued.id, loaded_running.id}
+    assert loaded_running.status == "queued"
+    assert loaded_running.started_at is None
+    assert loaded_running.events[-1].status == "queued"
+    assert loaded_running.events[-1].message == "Forecast job recovered for worker retry."
+
+
+def test_forecast_job_service_times_out_stale_active_jobs(tmp_path) -> None:
+    import asyncio
+
+    class RecordingWorker:
+        def __init__(self) -> None:
+            self.job_ids: list[str] = []
+
+        def enqueue(self, job_id: str) -> None:
+            self.job_ids.append(job_id)
+
+    async def scenario():
+        store = FileForecastJobStore(tmp_path)
+        service = ForecastJobService(
+            provider=MockForecastProvider(),
+            store=store,
+            default_stale_timeout_seconds=60,
+        )
+        job = await store.create(latitude=37.5665, longitude=126.9780)
+        old_time = datetime.now(UTC) - timedelta(minutes=10)
+        stale_running = job.model_copy(
+            update={
+                "status": "running",
+                "started_at": old_time,
+                "updated_at": old_time,
+            }
+        )
+        (tmp_path / f"{job.id}.json").write_text(
+            stale_running.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+        worker = RecordingWorker()
+
+        report = await service.recover_interrupted_jobs(worker=worker)
+        loaded = await store.get(job.id)
+        return report, worker.job_ids, loaded
+
+    report, job_ids, loaded = asyncio.run(scenario())
+
+    assert report.scanned_count == 1
+    assert report.requeued_count == 0
+    assert report.timed_out_count == 1
+    assert job_ids == []
+    assert loaded.status == "failed"
+    assert loaded.completed_at is not None
+    assert loaded.error == "Forecast worker timed out after 60 seconds without progress."
+    assert loaded.events[-1].status == "failed"
+    assert loaded.events[-1].message == "Forecast worker timed out."
+
+
 def test_forecast_job_service_rejects_retry_for_active_job() -> None:
     import asyncio
 
