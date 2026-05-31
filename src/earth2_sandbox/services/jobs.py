@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
@@ -32,10 +33,41 @@ class ForecastJobConflictError(RuntimeError):
     """Raised when a job state transition is not valid for the current status."""
 
 
+class ForecastJobTransitionError(ForecastJobConflictError):
+    """Raised when a conditional job update observes a different current status."""
+
+    def __init__(
+        self,
+        *,
+        job_id: str,
+        current_status: ForecastJobStatus,
+        expected_statuses: Collection[ForecastJobStatus],
+    ) -> None:
+        self.job_id = job_id
+        self.current_status = current_status
+        self.expected_statuses = frozenset(expected_statuses)
+        expected = ", ".join(sorted(self.expected_statuses))
+        super().__init__(
+            f"Cannot transition forecast job {job_id} from {current_status}; "
+            f"expected one of: {expected}."
+        )
+
+
 TERMINAL_JOB_STATUSES: set[ForecastJobTerminalStatus] = {
     "succeeded",
     "failed",
     "cancelled",
+}
+ALL_JOB_STATUSES: set[ForecastJobStatus] = {
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+}
+ACTIVE_JOB_STATUSES: set[ForecastJobStatus] = {
+    "queued",
+    "running",
 }
 
 
@@ -52,6 +84,13 @@ class ForecastJobStore(Protocol):
     async def get(self, job_id: str) -> ForecastJob: ...
 
     async def update(self, job: ForecastJob) -> ForecastJob: ...
+
+    async def update_if_status(
+        self,
+        job: ForecastJob,
+        *,
+        expected_statuses: Collection[ForecastJobStatus],
+    ) -> ForecastJob: ...
 
     async def list_recent(
         self,
@@ -115,11 +154,20 @@ class InMemoryForecastJobStore:
         return job
 
     async def update(self, job: ForecastJob) -> ForecastJob:
-        normalized_job_id = _normalize_job_id(job.id)
-        next_job = job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
+        return await self.update_if_status(job, expected_statuses=ALL_JOB_STATUSES)
+
+    async def update_if_status(
+        self,
+        job: ForecastJob,
+        *,
+        expected_statuses: Collection[ForecastJobStatus],
+    ) -> ForecastJob:
+        next_job = _prepare_job_for_update(job)
         async with self._lock:
-            if next_job.id not in self._jobs:
+            current = self._jobs.get(next_job.id)
+            if current is None:
                 raise ForecastJobNotFoundError(next_job.id)
+            _ensure_transition_allowed(current=current, expected_statuses=expected_statuses)
             self._jobs[next_job.id] = next_job
         return next_job
 
@@ -188,11 +236,21 @@ class FileForecastJobStore:
             return ForecastJob.model_validate_json(path.read_text(encoding="utf-8"))
 
     async def update(self, job: ForecastJob) -> ForecastJob:
-        normalized_job_id = _normalize_job_id(job.id)
-        next_job = job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
+        return await self.update_if_status(job, expected_statuses=ALL_JOB_STATUSES)
+
+    async def update_if_status(
+        self,
+        job: ForecastJob,
+        *,
+        expected_statuses: Collection[ForecastJobStatus],
+    ) -> ForecastJob:
+        next_job = _prepare_job_for_update(job)
         async with self._lock:
-            if not self._path(next_job.id).exists():
+            path = self._path(next_job.id)
+            if not path.exists():
                 raise ForecastJobNotFoundError(next_job.id)
+            current = ForecastJob.model_validate_json(path.read_text(encoding="utf-8"))
+            _ensure_transition_allowed(current=current, expected_statuses=expected_statuses)
             self._write(next_job)
         return next_job
 
@@ -310,7 +368,17 @@ class ForecastJobService:
             message="Forecast job cancelled by request.",
             occurred_at=now,
         )
-        return self._with_links(await self.store.update(cancelled))
+        try:
+            return self._with_links(
+                await self.store.update_if_status(
+                    cancelled,
+                    expected_statuses=ACTIVE_JOB_STATUSES,
+                )
+            )
+        except ForecastJobTransitionError as error:
+            raise ForecastJobConflictError(
+                f"Cannot cancel a {error.current_status} forecast job."
+            ) from error
 
     async def retry_job(self, job_id: str) -> ForecastJob:
         source = await self.store.get(job_id)
@@ -366,7 +434,10 @@ class ForecastJobService:
             message="Forecast provider request started.",
             occurred_at=now,
         )
-        await self.store.update(running_job)
+        try:
+            await self.store.update_if_status(running_job, expected_statuses={"queued"})
+        except ForecastJobTransitionError:
+            return
 
         try:
             provider_result = await self._get_provider_result(job)
@@ -377,30 +448,32 @@ class ForecastJobService:
         else:
             completed = datetime.now(UTC)
             current = await self.store.get(job_id)
-            if current.status == "cancelled":
+            if current.status != "running":
                 return
 
-            await self.store.update(
-                self._append_event(
-                    current.model_copy(
-                        update={
-                            "status": "succeeded",
-                            "completed_at": completed,
-                            "forecast": provider_result.summary,
-                            "diagnostics": ForecastJobDiagnostics(
-                                **{
-                                    **provider_result.diagnostics,
-                                    "message": "Forecast summary is ready.",
-                                }
-                            ),
-                            "error": None,
-                        }
-                    ),
-                    status="succeeded",
-                    message="Forecast summary is ready.",
-                    occurred_at=completed,
-                )
+            succeeded = self._append_event(
+                current.model_copy(
+                    update={
+                        "status": "succeeded",
+                        "completed_at": completed,
+                        "forecast": provider_result.summary,
+                        "diagnostics": ForecastJobDiagnostics(
+                            **{
+                                **provider_result.diagnostics,
+                                "message": "Forecast summary is ready.",
+                            }
+                        ),
+                        "error": None,
+                    }
+                ),
+                status="succeeded",
+                message="Forecast summary is ready.",
+                occurred_at=completed,
             )
+            try:
+                await self.store.update_if_status(succeeded, expected_statuses={"running"})
+            except ForecastJobTransitionError:
+                return
 
     async def _get_provider_result(self, job: ForecastJob) -> ForecastProviderResult:
         diagnostic_method = getattr(self.provider, "get_point_forecast_with_diagnostics", None)
@@ -421,25 +494,27 @@ class ForecastJobService:
 
     async def _mark_failed(self, *, job_id: str, error: str) -> None:
         job = await self.store.get(job_id)
-        if job.status == "cancelled":
+        if job.status != "running":
             return
 
         failed_at = datetime.now(UTC)
-        await self.store.update(
-            self._append_event(
-                job.model_copy(
-                    update={
-                        "status": "failed",
-                        "completed_at": failed_at,
-                        "error": error,
-                        "diagnostics": ForecastJobDiagnostics(message="Forecast job failed."),
-                    }
-                ),
-                status="failed",
-                message="Forecast job failed.",
-                occurred_at=failed_at,
-            )
+        failed = self._append_event(
+            job.model_copy(
+                update={
+                    "status": "failed",
+                    "completed_at": failed_at,
+                    "error": error,
+                    "diagnostics": ForecastJobDiagnostics(message="Forecast job failed."),
+                }
+            ),
+            status="failed",
+            message="Forecast job failed.",
+            occurred_at=failed_at,
         )
+        try:
+            await self.store.update_if_status(failed, expected_statuses={"running"})
+        except ForecastJobTransitionError:
+            return
 
     def _with_links(self, job: ForecastJob) -> ForecastJob:
         return job.model_copy(
@@ -527,6 +602,24 @@ def _normalize_job_id(job_id: str) -> str:
         raise ForecastJobNotFoundError(job_id) from error
 
     return str(parsed)
+
+
+def _prepare_job_for_update(job: ForecastJob) -> ForecastJob:
+    normalized_job_id = _normalize_job_id(job.id)
+    return job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
+
+
+def _ensure_transition_allowed(
+    *,
+    current: ForecastJob,
+    expected_statuses: Collection[ForecastJobStatus],
+) -> None:
+    if current.status not in expected_statuses:
+        raise ForecastJobTransitionError(
+            job_id=current.id,
+            current_status=current.status,
+            expected_statuses=expected_statuses,
+        )
 
 
 def _build_new_job(

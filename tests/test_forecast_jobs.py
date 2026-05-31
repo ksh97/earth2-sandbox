@@ -11,11 +11,14 @@ from earth2_sandbox.app import create_app
 from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
 from earth2_sandbox.providers import FourCastNetForecastProvider, MockForecastProvider
+from earth2_sandbox.schemas.jobs import ForecastJobDiagnostics, ForecastJobEvent
 from earth2_sandbox.services import (
     FileForecastJobStore,
     ForecastJobConflictError,
     ForecastJobNotFoundError,
     ForecastJobService,
+    ForecastJobTransitionError,
+    InMemoryForecastJobStore,
 )
 
 
@@ -135,6 +138,36 @@ def test_file_forecast_job_store_rejects_path_like_job_ids(tmp_path) -> None:
     assert not (tmp_path.parent / "outside.json").exists()
 
 
+def test_file_forecast_job_store_rejects_stale_status_transition(tmp_path) -> None:
+    import asyncio
+
+    async def scenario():
+        store = FileForecastJobStore(tmp_path)
+        queued = await store.create(latitude=37.5665, longitude=126.9780)
+        running = await store.update_if_status(
+            queued.model_copy(update={"status": "running"}),
+            expected_statuses={"queued"},
+        )
+        cancelled = await store.update_if_status(
+            running.model_copy(update={"status": "cancelled"}),
+            expected_statuses={"running"},
+        )
+
+        with pytest.raises(ForecastJobTransitionError) as error:
+            await store.update_if_status(
+                running.model_copy(update={"status": "succeeded"}),
+                expected_statuses={"running"},
+            )
+
+        return cancelled, error.value
+
+    cancelled, error = asyncio.run(scenario())
+
+    assert cancelled.status == "cancelled"
+    assert error.current_status == "cancelled"
+    assert error.expected_statuses == frozenset({"running"})
+
+
 def test_api_can_use_file_backed_job_store(tmp_path) -> None:
     api_client = TestClient(
         create_app(
@@ -196,6 +229,63 @@ def test_forecast_job_service_cancels_queued_job() -> None:
     assert loaded.status == "cancelled"
     assert loaded.forecast is None
     assert [event.status for event in loaded.events] == ["queued", "cancelled"]
+
+
+def test_forecast_job_service_does_not_overwrite_concurrent_cancel() -> None:
+    import asyncio
+
+    class CancelBeforeSuccessStore:
+        def __init__(self) -> None:
+            self.inner = InMemoryForecastJobStore()
+            self.cancelled = False
+
+        def __getattr__(self, name: str):
+            return getattr(self.inner, name)
+
+        async def update_if_status(self, job, *, expected_statuses):
+            if job.status == "succeeded" and not self.cancelled:
+                self.cancelled = True
+                current = await self.inner.get(job.id)
+                now = datetime.now(UTC)
+                cancelled = current.model_copy(
+                    update={
+                        "status": "cancelled",
+                        "completed_at": now,
+                        "diagnostics": ForecastJobDiagnostics(
+                            message="Simulated concurrent cancellation."
+                        ),
+                        "error": None,
+                        "events": [
+                            *current.events,
+                            ForecastJobEvent(
+                                occurred_at=now,
+                                status="cancelled",
+                                message="Simulated concurrent cancellation.",
+                            ),
+                        ],
+                    }
+                )
+                await self.inner.update_if_status(cancelled, expected_statuses={"running"})
+
+            return await self.inner.update_if_status(
+                job,
+                expected_statuses=expected_statuses,
+            )
+
+    async def scenario():
+        service = ForecastJobService(
+            provider=MockForecastProvider(),
+            store=CancelBeforeSuccessStore(),
+        )
+        job = await service.create_job(latitude=37.5665, longitude=126.9780)
+        await service.run_job(job.id)
+        return await service.get_job(job.id)
+
+    loaded = asyncio.run(scenario())
+
+    assert loaded.status == "cancelled"
+    assert loaded.forecast is None
+    assert [event.status for event in loaded.events] == ["queued", "running", "cancelled"]
 
 
 def test_forecast_job_service_rejects_retry_for_active_job() -> None:

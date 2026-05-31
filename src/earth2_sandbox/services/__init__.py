@@ -6,6 +6,7 @@ from earth2_sandbox.services.jobs import (
     ForecastJobNotFoundError,
     ForecastJobService,
     ForecastJobStore,
+    ForecastJobTransitionError,
     InMemoryForecastJobStore,
 )
 
@@ -15,6 +16,7 @@ __all__ = [
     "ForecastJobNotFoundError",
     "ForecastJobService",
     "ForecastJobStore",
+    "ForecastJobTransitionError",
     "InMemoryForecastJobStore",
 ]
 
