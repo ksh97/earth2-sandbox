@@ -13,7 +13,12 @@ from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceResult,
 )
 from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobCreateRequest
-from earth2_sandbox.services.jobs import ForecastJobNotFoundError, ForecastJobService
+from earth2_sandbox.services.jobs import (
+    FileForecastJobStore,
+    ForecastJobNotFoundError,
+    ForecastJobService,
+    InMemoryForecastJobStore,
+)
 
 LOCAL_DEV_ORIGINS = [
     "http://localhost:8081",
@@ -42,8 +47,14 @@ def create_app(
         allow_headers=["*"],
     )
     forecast_provider = forecast_provider_override or build_forecast_provider(settings)
+    forecast_job_store = (
+        FileForecastJobStore(settings.forecast_job_store_dir)
+        if settings.forecast_job_store_backend == "file"
+        else InMemoryForecastJobStore()
+    )
     forecast_job_service = forecast_job_service_override or ForecastJobService(
         provider=forecast_provider,
+        store=forecast_job_store,
     )
 
     @app.get("/")

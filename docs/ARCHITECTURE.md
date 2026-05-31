@@ -143,6 +143,15 @@ Creates a process-local queued forecast job for a point forecast request. This i
 first CQRS-friendly boundary: clients can command the backend to start a forecast job
 without waiting for hosted inference, then query job state separately.
 
+The job store is configurable:
+
+- `memory`: process-local development default
+- `file`: writes one JSON document per job under `EARTH2_FORECAST_JOB_STORE_DIR`
+
+The file-backed store is not a distributed queue, but it keeps hosted-call diagnostics
+across backend restarts and creates a simple migration path toward Redis, a database,
+or a worker service.
+
 `GET /api/v1/forecast/jobs/{job_id}`
 
 Returns the job state:
