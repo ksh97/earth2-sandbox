@@ -1,10 +1,17 @@
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
 
 
 class ForecastProviderUnavailableError(RuntimeError):
     """Raised when the selected forecast provider cannot serve a point forecast yet."""
+
+
+@dataclass(frozen=True)
+class ForecastProviderResult:
+    summary: ForecastSummary
+    diagnostics: dict[str, Any]
 
 
 class ForecastProvider(Protocol):

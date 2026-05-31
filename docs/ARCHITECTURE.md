@@ -51,6 +51,7 @@ Current backend layout:
 - `providers/factory.py`: environment-driven provider selection
 - `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
 - `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
+- `services/jobs.py`: queued forecast job contract and process-local worker orchestration
 - `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
 
 ### FourCastNet NIM
@@ -136,6 +137,26 @@ and `EARTH2_NVIDIA_API_KEY` are configured, this same endpoint requests hosted
 FourCastNet tar output, samples the nearest grid cell for the requested coordinates,
 and returns the stable `ForecastSummary` shape used by the mobile app.
 
+`POST /api/v1/forecast/jobs`
+
+Creates a process-local queued forecast job for a point forecast request. This is the
+first CQRS-friendly boundary: clients can command the backend to start a forecast job
+without waiting for hosted inference, then query job state separately.
+
+`GET /api/v1/forecast/jobs/{job_id}`
+
+Returns the job state:
+
+- `queued`: accepted but not started
+- `running`: provider request is executing
+- `succeeded`: forecast summary is available
+- `failed`: provider or post-processing failed
+
+The job response includes a `diagnostics` object. Mock providers return minimal provider
+diagnostics. FourCastNet jobs can expose backend-only operational facts such as response
+source, cache status, polling count, NVCF request id/status, and byte length. API keys and
+download URLs are never exposed.
+
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 
 Compatibility alias for earlier mobile prototypes.
@@ -162,6 +183,8 @@ Model integration stage:
 - Backend calls a self-hosted FourCastNet NIM.
 - Forecast jobs run asynchronously.
 - Results are cached in object storage.
+- The in-memory job store is replaced with a durable queue/store such as Redis, a database,
+  or a dedicated worker service.
 
 Production stage:
 
