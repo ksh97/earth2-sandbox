@@ -40,6 +40,19 @@ def create_app(
     )
     forecast_provider = forecast_provider_override or build_forecast_provider(settings)
 
+    @app.get("/")
+    async def index() -> dict[str, str | dict[str, str]]:
+        return {
+            "service": settings.app_name,
+            "status": "ok",
+            "links": {
+                "health": "/health",
+                "docs": "/docs",
+                "provider_status": "/api/v1/forecast/provider/status",
+                "point_forecast": "/api/v1/forecast/point?latitude=37.5665&longitude=126.9780",
+            },
+        }
+
     @app.get("/health")
     async def health() -> dict[str, str | bool]:
         return {

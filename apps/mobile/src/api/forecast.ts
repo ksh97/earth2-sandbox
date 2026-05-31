@@ -115,10 +115,31 @@ async function formatApiError(response: Response, label: string) {
   try {
     const payload = await response.json();
     const detail = isRecord(payload) && typeof payload.detail === "string" ? payload.detail : "";
-    return detail ? `${label} returned ${response.status}: ${detail}` : `${label} returned ${response.status}.`;
+    const message = detail
+      ? `${label} returned ${response.status}: ${detail}`
+      : `${label} returned ${response.status}.`;
+    return formatActionableApiError(message);
   } catch {
-    return `${label} returned ${response.status}.`;
+    return formatActionableApiError(`${label} returned ${response.status}.`);
   }
+}
+
+function formatActionableApiError(message: string) {
+  if (message.includes("Hosted FourCastNet returned 504")) {
+    return (
+      "Hosted FourCastNet did not return a forecast body yet. " +
+      "The local backend is reachable, but the hosted provider needs retry or asset-download handling."
+    );
+  }
+
+  if (message.includes("large asset marker")) {
+    return (
+      "Hosted FourCastNet returned a large-result marker instead of forecast bytes. " +
+      "The backend needs output asset download handling before this can be sampled on the map."
+    );
+  }
+
+  return message;
 }
 
 function parseForecastSummary(payload: unknown): ForecastSummary {

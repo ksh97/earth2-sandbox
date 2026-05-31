@@ -27,6 +27,19 @@ def test_health_contract() -> None:
     }
 
 
+def test_index_contract() -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "earth2-sandbox"
+    assert body["status"] == "ok"
+    assert body["links"]["health"] == "/health"
+    assert body["links"]["docs"] == "/docs"
+    assert body["links"]["provider_status"] == "/api/v1/forecast/provider/status"
+    assert body["links"]["point_forecast"].startswith("/api/v1/forecast/point")
+
+
 def test_health_allows_local_mobile_preview_origin() -> None:
     response = client.get("/health", headers={"Origin": "http://localhost:8081"})
 

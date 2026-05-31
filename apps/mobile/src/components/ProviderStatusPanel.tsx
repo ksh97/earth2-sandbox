@@ -23,6 +23,16 @@ export function ProviderStatusPanel({
         <Text style={styles.label}>Backend provider</Text>
         <Text style={styles.title}>{status ? formatProvider(status) : level}</Text>
         <Text style={styles.detail}>{detail}</Text>
+        {status ? (
+          <View style={styles.metaGrid}>
+            <StatusMeta label="Configured" value={status.configured ? "Yes" : "No"} />
+            <StatusMeta
+              label="Point forecast"
+              value={status.supports_point_forecast ? "Ready" : "Blocked"}
+            />
+            <StatusMeta label="Endpoint" value={status.endpoint ?? "local mock"} />
+          </View>
+        ) : null}
       </View>
       <View style={styles.actions}>
         <Text
@@ -50,6 +60,17 @@ function formatProvider(status: ForecastProviderStatus) {
   return `${status.provider} / ${status.mode} / ${support}`;
 }
 
+function StatusMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metaItem}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text numberOfLines={2} style={styles.metaValue}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   panel: {
     alignItems: "flex-start",
@@ -58,6 +79,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.md,
     justifyContent: "space-between",
     padding: spacing.md,
@@ -83,6 +105,35 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     letterSpacing: 0,
+  },
+  metaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  metaItem: {
+    backgroundColor: colors.input,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 140,
+    padding: spacing.sm,
+  },
+  metaLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  metaValue: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0,
+    marginTop: 2,
   },
   actions: {
     alignItems: "flex-end",
