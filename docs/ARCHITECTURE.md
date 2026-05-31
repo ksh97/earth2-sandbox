@@ -108,7 +108,7 @@ an adapter smoke-test endpoint, not yet the mobile point-forecast endpoint. The 
 decoded tar metadata and a post-processing report with the remaining steps required to turn raw
 FourCastNet output into mobile forecast summaries.
 
-`GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
+`GET /api/v1/forecast/point?latitude=37.5665&longitude=126.9780`
 
 Returns a mobile-friendly forecast payload for UI prototyping:
 
@@ -121,6 +121,10 @@ When `EARTH2_FORECAST_PROVIDER=fourcastnet`, `EARTH2_FOURCASTNET_ENDPOINT_MODE=h
 and `EARTH2_NVIDIA_API_KEY` are configured, this same endpoint requests hosted
 FourCastNet tar output, samples the nearest grid cell for the requested coordinates,
 and returns the stable `ForecastSummary` shape used by the mobile app.
+
+`GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
+
+Compatibility alias for earlier mobile prototypes.
 
 ## Later API Contracts
 

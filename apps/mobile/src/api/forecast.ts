@@ -77,14 +77,14 @@ const fallbackBaseUrl = Platform.select({
 const apiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? fallbackBaseUrl ?? "http://127.0.0.1:8000";
 
-export async function fetchSampleForecast({
+export async function fetchPointForecast({
   latitude,
   longitude,
 }: ForecastRequest): Promise<ForecastSummary> {
   const query = `latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(
     String(longitude),
   )}`;
-  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/sample?${query}`);
+  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/point?${query}`);
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast API"));

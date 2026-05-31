@@ -40,6 +40,19 @@ def test_sample_forecast_contract() -> None:
         params={"latitude": 37.5665, "longitude": 126.9780},
     )
 
+    assert_forecast_contract(response)
+
+
+def test_point_forecast_contract() -> None:
+    response = client.get(
+        "/api/v1/forecast/point",
+        params={"latitude": 37.5665, "longitude": 126.9780},
+    )
+
+    assert_forecast_contract(response)
+
+
+def assert_forecast_contract(response) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["provider"] == "mock"
@@ -92,6 +105,15 @@ def test_forecast_provider_status_contract() -> None:
 def test_sample_forecast_rejects_invalid_location() -> None:
     response = client.get(
         "/api/v1/forecast/sample",
+        params={"latitude": 120, "longitude": 126.9780},
+    )
+
+    assert response.status_code == 422
+
+
+def test_point_forecast_rejects_invalid_location() -> None:
+    response = client.get(
+        "/api/v1/forecast/point",
         params={"latitude": 120, "longitude": 126.9780},
     )
 

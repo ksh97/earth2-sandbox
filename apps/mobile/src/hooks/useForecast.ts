@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   fetchForecastProviderStatus,
-  fetchSampleForecast,
+  fetchPointForecast,
   ForecastProviderStatus,
   ForecastSummary,
 } from "../api/forecast";
@@ -87,7 +87,7 @@ export function useForecast() {
     setErrorMessage(null);
 
     try {
-      const nextForecast = await fetchSampleForecast({
+      const nextForecast = await fetchPointForecast({
         latitude: parsedLatitude,
         longitude: parsedLongitude,
       });

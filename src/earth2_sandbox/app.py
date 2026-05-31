@@ -54,11 +54,7 @@ def create_app(
     async def forecast_provider_status() -> ForecastProviderStatus:
         return await forecast_provider.get_status()
 
-    @app.get("/api/v1/forecast/sample", response_model=ForecastSummary)
-    async def sample_forecast(
-        latitude: float = Query(..., ge=-90, le=90),
-        longitude: float = Query(..., ge=-180, le=180),
-    ) -> ForecastSummary:
+    async def point_forecast_response(latitude: float, longitude: float) -> ForecastSummary:
         try:
             return await forecast_provider.get_point_forecast(
                 latitude=latitude,
@@ -66,6 +62,20 @@ def create_app(
             )
         except ForecastProviderUnavailableError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
+
+    @app.get("/api/v1/forecast/point", response_model=ForecastSummary)
+    async def point_forecast(
+        latitude: float = Query(..., ge=-90, le=90),
+        longitude: float = Query(..., ge=-180, le=180),
+    ) -> ForecastSummary:
+        return await point_forecast_response(latitude=latitude, longitude=longitude)
+
+    @app.get("/api/v1/forecast/sample", response_model=ForecastSummary)
+    async def sample_forecast(
+        latitude: float = Query(..., ge=-90, le=90),
+        longitude: float = Query(..., ge=-180, le=180),
+    ) -> ForecastSummary:
+        return await point_forecast_response(latitude=latitude, longitude=longitude)
 
     @app.post(
         "/api/v1/forecast/fourcastnet/hosted/infer",
