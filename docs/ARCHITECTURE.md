@@ -51,7 +51,8 @@ Current backend layout:
 - `providers/factory.py`: environment-driven provider selection
 - `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
 - `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
-- `services/jobs.py`: queued forecast job contract and process-local worker orchestration
+- `services/jobs.py`: queued forecast job contract, recovery policy, and store transitions
+- `workers.py`: forecast job worker port with FastAPI-deferred and startup recovery adapters
 - `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
 
 ### FourCastNet NIM
@@ -152,6 +153,12 @@ The file-backed store is not a distributed queue, but it keeps hosted-call diagn
 across backend restarts and creates a simple migration path toward Redis, a database,
 or a worker service.
 
+When the backend starts, the service scans active job files. Existing `queued` jobs
+are scheduled again, and interrupted `running` jobs are moved back to `queued` before
+being scheduled. Active jobs whose `updated_at` timestamp is older than
+`EARTH2_FORECAST_JOB_STALE_TIMEOUT_SECONDS` are marked `failed` instead of being
+requeued, which prevents mobile clients from polling forever after a lost worker.
+
 `GET /api/v1/forecast/jobs?limit=20&status=succeeded`
 
 Returns recent job summaries sorted by creation time. The optional `status` filter accepts
@@ -201,6 +208,10 @@ the original job document.
 Deletes terminal jobs older than the configured retention window. `EARTH2_FORECAST_JOB_RETENTION_HOURS`
 defaults to 168 hours and can be overridden per cleanup request. This keeps local job files bounded
 while preserving active work and recent diagnostics.
+
+Active job timeout is configured separately with `EARTH2_FORECAST_JOB_STALE_TIMEOUT_SECONDS`,
+which defaults to 1800 seconds. Timeout recovery is part of startup job recovery, not
+retention cleanup, so it never deletes diagnostics.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 

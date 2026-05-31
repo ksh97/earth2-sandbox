@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Collection
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
@@ -23,6 +24,7 @@ from earth2_sandbox.schemas.jobs import (
     ForecastJobSummary,
     ForecastJobTerminalStatus,
 )
+from earth2_sandbox.workers import ForecastJobWorker
 
 
 class ForecastJobNotFoundError(KeyError):
@@ -71,6 +73,14 @@ ACTIVE_JOB_STATUSES: set[ForecastJobStatus] = {
 }
 
 
+@dataclass(frozen=True)
+class ForecastJobRecoveryReport:
+    scanned_count: int
+    requeued_count: int
+    timed_out_count: int
+    skipped_count: int
+
+
 class ForecastJobStore(Protocol):
     async def create(
         self,
@@ -98,6 +108,8 @@ class ForecastJobStore(Protocol):
         limit: int,
         status: ForecastJobStatus | None = None,
     ) -> list[ForecastJob]: ...
+
+    async def list_active(self) -> list[ForecastJob]: ...
 
     async def delete_older_than(
         self,
@@ -181,6 +193,11 @@ class InMemoryForecastJobStore:
             jobs = list(self._jobs.values())
         return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
 
+    async def list_active(self) -> list[ForecastJob]:
+        async with self._lock:
+            jobs = list(self._jobs.values())
+        return _sort_jobs([job for job in jobs if job.status in ACTIVE_JOB_STATUSES])
+
     async def delete_older_than(
         self,
         *,
@@ -261,14 +278,13 @@ class FileForecastJobStore:
         status: ForecastJobStatus | None = None,
     ) -> list[ForecastJob]:
         async with self._lock:
-            jobs: list[ForecastJob] = []
-            if self.root.exists():
-                for path in self.root.glob("*.json"):
-                    try:
-                        jobs.append(ForecastJob.model_validate_json(path.read_text("utf-8")))
-                    except ValueError:
-                        continue
+            jobs = self._read_all_unlocked()
         return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
+
+    async def list_active(self) -> list[ForecastJob]:
+        async with self._lock:
+            jobs = self._read_all_unlocked()
+        return _sort_jobs([job for job in jobs if job.status in ACTIVE_JOB_STATUSES])
 
     async def delete_older_than(
         self,
@@ -314,6 +330,18 @@ class FileForecastJobStore:
         )
         temporary.replace(target)
 
+    def _read_all_unlocked(self) -> list[ForecastJob]:
+        if not self.root.exists():
+            return []
+
+        jobs: list[ForecastJob] = []
+        for path in self.root.glob("*.json"):
+            try:
+                jobs.append(ForecastJob.model_validate_json(path.read_text("utf-8")))
+            except ValueError:
+                continue
+        return jobs
+
 
 class ForecastJobService:
     def __init__(
@@ -322,10 +350,12 @@ class ForecastJobService:
         provider: ForecastProvider,
         store: ForecastJobStore | None = None,
         default_retention_hours: int = 168,
+        default_stale_timeout_seconds: int = 1800,
     ) -> None:
         self.provider = provider
         self.store = store or InMemoryForecastJobStore()
         self.default_retention_hours = default_retention_hours
+        self.default_stale_timeout_seconds = default_stale_timeout_seconds
 
     async def create_job(self, *, latitude: float, longitude: float) -> ForecastJob:
         return self._with_links(await self.store.create(latitude=latitude, longitude=longitude))
@@ -410,6 +440,63 @@ class ForecastJobService:
             deleted_count=deleted_count,
             cutoff=cutoff,
             statuses=sorted(cleanup_statuses),
+        )
+
+    async def recover_interrupted_jobs(
+        self,
+        *,
+        worker: ForecastJobWorker,
+        stale_timeout_seconds: int | None = None,
+    ) -> ForecastJobRecoveryReport:
+        timeout = stale_timeout_seconds or self.default_stale_timeout_seconds
+        now = datetime.now(UTC)
+        active_jobs = await self.store.list_active()
+        requeued_count = 0
+        timed_out_count = 0
+        skipped_count = 0
+
+        for job in active_jobs:
+            if _is_stale_job(job=job, now=now, timeout_seconds=timeout):
+                if await self._mark_timed_out(job=job, occurred_at=now, timeout_seconds=timeout):
+                    timed_out_count += 1
+                else:
+                    skipped_count += 1
+                continue
+
+            if job.status == "running":
+                recovered = self._append_event(
+                    job.model_copy(
+                        update={
+                            "status": "queued",
+                            "started_at": None,
+                            "diagnostics": ForecastJobDiagnostics(
+                                provider=job.diagnostics.provider if job.diagnostics else None,
+                                message="Forecast job recovered for worker retry.",
+                            ),
+                            "error": None,
+                        }
+                    ),
+                    status="queued",
+                    message="Forecast job recovered for worker retry.",
+                    occurred_at=now,
+                )
+                try:
+                    job = await self.store.update_if_status(
+                        recovered,
+                        expected_statuses={"running"},
+                    )
+                except ForecastJobTransitionError:
+                    skipped_count += 1
+                    continue
+
+            worker.enqueue(job.id)
+            requeued_count += 1
+
+        return ForecastJobRecoveryReport(
+            scanned_count=len(active_jobs),
+            requeued_count=requeued_count,
+            timed_out_count=timed_out_count,
+            skipped_count=skipped_count,
         )
 
     async def run_job(self, job_id: str) -> None:
@@ -516,6 +603,41 @@ class ForecastJobService:
         except ForecastJobTransitionError:
             return
 
+    async def _mark_timed_out(
+        self,
+        *,
+        job: ForecastJob,
+        occurred_at: datetime,
+        timeout_seconds: int,
+    ) -> bool:
+        timeout_message = (
+            f"Forecast worker timed out after {timeout_seconds} seconds without progress."
+        )
+        timed_out = self._append_event(
+            job.model_copy(
+                update={
+                    "status": "failed",
+                    "completed_at": occurred_at,
+                    "error": timeout_message,
+                    "diagnostics": ForecastJobDiagnostics(
+                        provider=job.diagnostics.provider if job.diagnostics else None,
+                        message="Forecast worker timed out.",
+                    ),
+                }
+            ),
+            status="failed",
+            message="Forecast worker timed out.",
+            occurred_at=occurred_at,
+        )
+        try:
+            await self.store.update_if_status(
+                timed_out,
+                expected_statuses=ACTIVE_JOB_STATUSES,
+            )
+        except ForecastJobTransitionError:
+            return False
+        return True
+
     def _with_links(self, job: ForecastJob) -> ForecastJob:
         return job.model_copy(
             update={
@@ -591,8 +713,11 @@ def _sort_and_filter_jobs(
     status: ForecastJobStatus | None,
 ) -> list[ForecastJob]:
     filtered = [job for job in jobs if status is None or job.status == status]
-    filtered.sort(key=lambda job: (job.created_at, job.id), reverse=True)
-    return filtered[:limit]
+    return _sort_jobs(filtered)[:limit]
+
+
+def _sort_jobs(jobs: list[ForecastJob]) -> list[ForecastJob]:
+    return sorted(jobs, key=lambda job: (job.created_at, job.id), reverse=True)
 
 
 def _normalize_job_id(job_id: str) -> str:
@@ -620,6 +745,15 @@ def _ensure_transition_allowed(
             current_status=current.status,
             expected_statuses=expected_statuses,
         )
+
+
+def _is_stale_job(
+    *,
+    job: ForecastJob,
+    now: datetime,
+    timeout_seconds: int,
+) -> bool:
+    return job.updated_at <= now - timedelta(seconds=timeout_seconds)
 
 
 def _build_new_job(

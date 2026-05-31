@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
@@ -30,6 +32,7 @@ from earth2_sandbox.services.jobs import (
     ForecastJobService,
     InMemoryForecastJobStore,
 )
+from earth2_sandbox.workers import AsyncioTaskForecastJobWorker, DeferredForecastJobWorker
 
 LOCAL_DEV_ORIGINS = [
     "http://localhost:8081",
@@ -45,18 +48,6 @@ def create_app(
     forecast_job_service_override: ForecastJobService | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    app = FastAPI(
-        title=settings.app_name,
-        version="0.1.0",
-        description="Backend API for the Earth-2 weather forecast sandbox.",
-    )
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=LOCAL_DEV_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
     forecast_provider = forecast_provider_override or build_forecast_provider(settings)
     forecast_job_store = (
         FileForecastJobStore(settings.forecast_job_store_dir)
@@ -67,6 +58,31 @@ def create_app(
         provider=forecast_provider,
         store=forecast_job_store,
         default_retention_hours=settings.forecast_job_retention_hours,
+        default_stale_timeout_seconds=settings.forecast_job_stale_timeout_seconds,
+    )
+    recovered_job_tasks: set[asyncio.Task[None]] = set()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        worker = AsyncioTaskForecastJobWorker(
+            run_job=forecast_job_service.run_job,
+            tasks=recovered_job_tasks,
+        )
+        await forecast_job_service.recover_interrupted_jobs(worker=worker)
+        yield
+
+    app = FastAPI(
+        title=settings.app_name,
+        version="0.1.0",
+        description="Backend API for the Earth-2 weather forecast sandbox.",
+        lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=LOCAL_DEV_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/")
@@ -133,7 +149,11 @@ def create_app(
             latitude=request.latitude,
             longitude=request.longitude,
         )
-        background_tasks.add_task(forecast_job_service.run_job, job.id)
+        worker = DeferredForecastJobWorker(
+            add_task=background_tasks.add_task,
+            run_job=forecast_job_service.run_job,
+        )
+        worker.enqueue(job.id)
         return job
 
     @app.get("/api/v1/forecast/jobs", response_model=ForecastJobListResponse)
@@ -197,7 +217,11 @@ def create_app(
         except ForecastJobConflictError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
-        background_tasks.add_task(forecast_job_service.run_job, job.id)
+        worker = DeferredForecastJobWorker(
+            add_task=background_tasks.add_task,
+            run_job=forecast_job_service.run_job,
+        )
+        worker.enqueue(job.id)
         return job
 
     @app.post(
