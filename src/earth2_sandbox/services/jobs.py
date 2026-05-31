@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from earth2_sandbox.providers import (
     ForecastProvider,
@@ -107,14 +107,16 @@ class InMemoryForecastJobStore:
         return job
 
     async def get(self, job_id: str) -> ForecastJob:
+        normalized_job_id = _normalize_job_id(job_id)
         async with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._jobs.get(normalized_job_id)
         if job is None:
             raise ForecastJobNotFoundError(job_id)
         return job
 
     async def update(self, job: ForecastJob) -> ForecastJob:
-        next_job = job.model_copy(update={"updated_at": datetime.now(UTC)})
+        normalized_job_id = _normalize_job_id(job.id)
+        next_job = job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
         async with self._lock:
             if next_job.id not in self._jobs:
                 raise ForecastJobNotFoundError(next_job.id)
@@ -186,7 +188,8 @@ class FileForecastJobStore:
             return ForecastJob.model_validate_json(path.read_text(encoding="utf-8"))
 
     async def update(self, job: ForecastJob) -> ForecastJob:
-        next_job = job.model_copy(update={"updated_at": datetime.now(UTC)})
+        normalized_job_id = _normalize_job_id(job.id)
+        next_job = job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
         async with self._lock:
             if not self._path(next_job.id).exists():
                 raise ForecastJobNotFoundError(next_job.id)
@@ -234,7 +237,14 @@ class FileForecastJobStore:
         return deleted_count
 
     def _path(self, job_id: str) -> Path:
-        return self.root / f"{job_id}.json"
+        normalized_job_id = _normalize_job_id(job_id)
+        root = self.root.resolve()
+        target = (root / f"{normalized_job_id}.json").resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as error:
+            raise ForecastJobNotFoundError(job_id) from error
+        return target
 
     def _write(self, job: ForecastJob) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -508,6 +518,15 @@ def _sort_and_filter_jobs(
     filtered = [job for job in jobs if status is None or job.status == status]
     filtered.sort(key=lambda job: (job.created_at, job.id), reverse=True)
     return filtered[:limit]
+
+
+def _normalize_job_id(job_id: str) -> str:
+    try:
+        parsed = UUID(job_id)
+    except (TypeError, ValueError) as error:
+        raise ForecastJobNotFoundError(job_id) from error
+
+    return str(parsed)
 
 
 def _build_new_job(

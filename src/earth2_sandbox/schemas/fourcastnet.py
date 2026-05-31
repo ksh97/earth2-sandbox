@@ -37,7 +37,7 @@ class FourCastNetHostedInferenceResult(BaseModel):
     response_source: FourCastNetResponseSource = "inline"
     response_reference_present: bool = False
     cache_status: FourCastNetCacheStatus = "disabled"
-    cached_tar_path: str | None = None
+    cached_artifact_id: str | None = None
     raw_content: bytes | None = Field(default=None, exclude=True, repr=False)
 
 

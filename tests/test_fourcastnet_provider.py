@@ -373,6 +373,42 @@ def test_fourcastnet_provider_uses_cached_tar_for_reproducible_point_forecast(tm
     assert list(tmp_path.glob("*.json"))
 
 
+def test_fourcastnet_diagnostics_expose_cache_artifact_id_not_path(tmp_path) -> None:
+    content = _build_tar_bytes(
+        {
+            "000_000.npy": _build_point_array(
+                wind_speed_ms=7,
+                temperature_k=292.15,
+                pressure_pa=101100,
+                tcwv=36,
+            ),
+        }
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=content,
+            headers={"content-type": "application/x-tar"},
+        )
+
+    provider = FourCastNetForecastProvider(
+        client=FourCastNetNimClient(
+            base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+            mode="hosted",
+            api_key="test-key",
+            transport=httpx.MockTransport(handler),
+        ),
+        result_cache=FourCastNetResultCache(tmp_path),
+    )
+
+    result = asyncio.run(provider.get_point_forecast_with_diagnostics(latitude=0, longitude=90))
+
+    assert result.diagnostics["cache_status"] == "stored"
+    assert result.diagnostics["cached_artifact_id"]
+    assert "cached_tar_path" not in result.diagnostics
+
+
 def test_hosted_inference_route_returns_adapter_result() -> None:
     content = _build_tar_bytes(
         {
@@ -419,6 +455,8 @@ def test_hosted_inference_route_returns_adapter_result() -> None:
     assert body["decoded_tar"]["member_count"] == 2
     assert body["decoded_tar"]["lead_time_hours"] == [0, 6]
     assert body["decoded_tar"]["arrays"][0]["shape"] == [1, 1, 1, 2]
+    assert body["cached_artifact_id"] is None
+    assert "cached_tar_path" not in body
     assert body["post_processing"]["mobile_summary_ready"] is False
     assert body["post_processing"]["detected_format"] == "tar"
     assert "Use decoded NumPy member metadata" in body["post_processing"]["required_steps"][1]

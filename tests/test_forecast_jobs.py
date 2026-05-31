@@ -14,6 +14,7 @@ from earth2_sandbox.providers import FourCastNetForecastProvider, MockForecastPr
 from earth2_sandbox.services import (
     FileForecastJobStore,
     ForecastJobConflictError,
+    ForecastJobNotFoundError,
     ForecastJobService,
 )
 
@@ -68,6 +69,8 @@ def test_fourcastnet_job_exposes_asset_and_cache_diagnostics(tmp_path) -> None:
     assert job["diagnostics"]["provider"] == "fourcastnet"
     assert job["diagnostics"]["response_source"] == "inline"
     assert job["diagnostics"]["cache_status"] == "disabled"
+    assert job["diagnostics"]["cached_artifact_id"] is None
+    assert "cached_tar_path" not in job["diagnostics"]
     assert job["diagnostics"]["byte_length"] == len(content)
 
 
@@ -117,6 +120,19 @@ def test_file_forecast_job_store_persists_job_state(tmp_path) -> None:
     assert loaded.latitude == 37.5665
     assert loaded.longitude == 126.9780
     assert (tmp_path / f"{loaded.id}.json").exists()
+
+
+def test_file_forecast_job_store_rejects_path_like_job_ids(tmp_path) -> None:
+    import asyncio
+
+    async def scenario():
+        store = FileForecastJobStore(tmp_path)
+        for job_id in ("../outside", "..\\outside", "not-a-uuid"):
+            with pytest.raises(ForecastJobNotFoundError):
+                await store.get(job_id)
+
+    asyncio.run(scenario())
+    assert not (tmp_path.parent / "outside.json").exists()
 
 
 def test_api_can_use_file_backed_job_store(tmp_path) -> None:
