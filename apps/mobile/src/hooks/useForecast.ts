@@ -95,7 +95,9 @@ export function useForecast() {
       setSelectedLeadHour(nextForecast.timeline[0]?.lead_time_hours ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Forecast request failed.";
+      setForecast(null);
       setErrorMessage(message);
+      setSelectedLeadHour(null);
     } finally {
       setIsLoading(false);
     }

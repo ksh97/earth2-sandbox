@@ -40,6 +40,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
     justifyContent: "space-between",
     minHeight: 132,
     overflow: "hidden",
@@ -58,6 +60,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: colors.surface,
+    flexShrink: 1,
     fontSize: 30,
     fontWeight: "800",
     letterSpacing: 0,

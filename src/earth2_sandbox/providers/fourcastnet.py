@@ -59,12 +59,19 @@ class FourCastNetForecastProvider:
         )
         try:
             result = await self.client.run_hosted_inference(request)
+            if result.large_asset_message:
+                raise ForecastProviderUnavailableError(
+                    "Hosted FourCastNet returned a large asset marker instead of tar bytes. "
+                    "Output asset download via NVCF polling or redirect handling is not wired yet."
+                )
             return self.post_processor.build_forecast_summary_from_hosted_result(
                 result=result,
                 request=request,
                 latitude=latitude,
                 longitude=longitude,
             )
+        except ForecastProviderUnavailableError:
+            raise
         except (FourCastNetInferenceError, FourCastNetPostProcessingError) as error:
             raise ForecastProviderUnavailableError(str(error)) from error
 
