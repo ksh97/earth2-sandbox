@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
+    flexShrink: 1,
     fontSize: 38,
     fontWeight: "800",
     letterSpacing: 0,
@@ -61,6 +62,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.xs,
     minHeight: 34,
+    flexShrink: 0,
     paddingHorizontal: spacing.sm,
   },
   statusDot: {

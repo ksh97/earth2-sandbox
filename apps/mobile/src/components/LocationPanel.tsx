@@ -133,11 +133,13 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
   },
   inputGroup: {
     flex: 1,
     gap: spacing.xs,
+    minWidth: 220,
   },
   label: {
     color: colors.muted,

@@ -72,7 +72,9 @@ python -m uvicorn earth2_sandbox.main:app --reload
 
 서버가 켜지면 다음 주소를 확인합니다.
 
+- 개발 진단: `.\.venv\Scripts\python.exe tools\dev_doctor.py`
 - API 상태: http://127.0.0.1:8000/health
+- API 인덱스: http://127.0.0.1:8000/
 - 예보 provider 상태: http://127.0.0.1:8000/api/v1/forecast/provider/status
 - 점 예보: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
 - 예전 prototype 호환 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780

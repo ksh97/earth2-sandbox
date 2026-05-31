@@ -214,6 +214,36 @@ def test_hosted_fourcastnet_point_forecast_samples_tar_response() -> None:
     assert forecast.timeline[0].pressure_hpa == 1011.0
 
 
+def test_hosted_fourcastnet_point_forecast_reports_large_asset_marker() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"message": "Large asset written"},
+            headers={
+                "content-type": "application/json",
+                "nvcf-reqid": "test-request-id",
+                "nvcf-status": "fulfilled",
+            },
+        )
+
+    provider = FourCastNetForecastProvider(
+        client=FourCastNetNimClient(
+            base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+            mode="hosted",
+            api_key="test-key",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+
+    try:
+        asyncio.run(provider.get_point_forecast(latitude=0, longitude=90))
+    except RuntimeError as error:
+        assert "large asset marker" in str(error)
+        assert "NVCF polling or redirect handling is not wired yet" in str(error)
+    else:
+        raise AssertionError("Expected large asset marker to block point forecast sampling.")
+
+
 def test_hosted_inference_route_returns_adapter_result() -> None:
     content = _build_tar_bytes(
         {
