@@ -60,7 +60,8 @@ python -m uvicorn earth2_sandbox.main:app --reload
 서버가 켜지면 다음 주소를 확인합니다.
 
 - API 상태: http://127.0.0.1:8000/health
-- 예시 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
+- 점 예보 API: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
+- 예전 mock 호환 API: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
 
 ## 모바일 앱 시작
@@ -80,6 +81,18 @@ Android Emulator에서 로컬 백엔드에 접속할 때는 `http://10.0.2.2:800
 - 대용량 기상 데이터, 모델 체크포인트, 산출물은 GitHub에 올리지 않습니다.
 - 처음에는 mock API로 모바일 화면과 API 계약을 검증합니다.
 - FourCastNet NIM 연동은 백엔드에서 숨기고, 앱은 단순한 JSON API만 호출하게 만듭니다.
+
+## FourCastNet NIM 연동
+
+실제 FourCastNet 예보를 쓰려면 백엔드가 NIM 컨테이너에 입력 배열을 보내고, 반환된 tar 안의 NumPy 격자에서 요청 좌표의 값만 뽑아 모바일용 JSON으로 변환합니다.
+
+1. NVIDIA 문서에 따라 FourCastNet NIM 컨테이너를 실행합니다.
+2. Earth2Studio로 `./data/fcn_inputs.npy` 입력 파일을 만듭니다.
+3. `.env`에서 `EARTH2_ENABLE_MOCK_FORECAST=false`로 바꿉니다.
+4. `EARTH2_FOURCASTNET_INPUT_ARRAY_PATH`, `EARTH2_FOURCASTNET_INPUT_TIME`, `EARTH2_FOURCASTNET_SIMULATION_LENGTH` 값을 확인합니다.
+5. 백엔드와 모바일 앱을 다시 실행합니다.
+
+자세한 절차는 `docs/FOURCASTNET_NIM.md`에 정리되어 있습니다.
 
 ## 참고 문서
 

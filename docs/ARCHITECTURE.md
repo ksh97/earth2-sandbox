@@ -54,9 +54,13 @@ The current codebase starts with a mock forecast provider so that mobile and API
 
 Returns backend status.
 
-`GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
+`GET /api/v1/forecast/point?latitude=37.5665&longitude=126.9780`
 
 Returns a small forecast summary for UI prototyping.
+
+`GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
+
+Compatibility alias for the first mobile prototype.
 
 ## Later API Contracts
 
@@ -78,6 +82,9 @@ Early stage:
 Model integration stage:
 
 - Backend calls a self-hosted FourCastNet NIM.
+- Backend sends `fcn_inputs.npy` to `/v1/infer`.
+- Backend stores the returned tar archive outside GitHub.
+- Backend extracts only the requested point metrics from the returned `.npy` grid.
 - Forecast jobs run asynchronously.
 - Results are cached in object storage.
 

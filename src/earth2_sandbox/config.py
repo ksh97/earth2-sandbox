@@ -23,9 +23,12 @@ class Settings(BaseSettings):
     nvidia_api_key: SecretStr | None = Field(default=None)
     enable_mock_forecast: bool = True
     request_timeout_seconds: int = 300
+    fourcastnet_input_array_path: str | None = None
+    fourcastnet_input_time: str = "2023-01-01T00:00:00Z"
+    fourcastnet_simulation_length: int = Field(default=1, ge=1, le=40)
+    fourcastnet_summary_lead_hours: int = Field(default=6, ge=0)
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

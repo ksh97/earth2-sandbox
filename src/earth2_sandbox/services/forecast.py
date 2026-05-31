@@ -18,6 +18,20 @@ class ForecastSummary(BaseModel):
     longitude: float = Field(ge=-180, le=180)
     headline: str
     metrics: list[ForecastMetric]
+    lead_hours: int | None = None
+    source_time: str | None = None
+
+
+class ForecastProviderUnavailable(RuntimeError):
+    """Raised when the configured forecast provider cannot produce a forecast."""
+
+
+class UnavailableForecastService:
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+    async def get_point_forecast(self, latitude: float, longitude: float) -> ForecastSummary:
+        raise ForecastProviderUnavailable(self.reason)
 
 
 class MockForecastService:
@@ -42,4 +56,3 @@ class MockForecastService:
                 ForecastMetric(name="humidity", value=humidity_percent, unit="percent"),
             ],
         )
-

@@ -11,4 +11,7 @@ fourcastnet:
   nim_base_url: http://localhost:8000
   request_timeout_seconds: 300
   enable_mock_forecast: true
-
+  input_array_path: ./data/fcn_inputs.npy
+  input_time: 2023-01-01T00:00:00Z
+  simulation_length: 1
+  summary_lead_hours: 6

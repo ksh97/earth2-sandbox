@@ -13,6 +13,8 @@ export type ForecastSummary = {
   longitude: number;
   headline: string;
   metrics: ForecastMetric[];
+  lead_hours?: number | null;
+  source_time?: string | null;
 };
 
 type ForecastRequest = {
@@ -35,7 +37,7 @@ export async function fetchSampleForecast({
   const query = `latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(
     String(longitude),
   )}`;
-  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/sample?${query}`);
+  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/point?${query}`);
 
   if (!response.ok) {
     throw new Error(`Forecast API returned ${response.status}.`);

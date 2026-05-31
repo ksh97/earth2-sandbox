@@ -41,6 +41,7 @@ logs/
 
 # Mobile app
 apps/mobile/node_modules/
+apps/mobile/.npm-cache/
 apps/mobile/.expo/
 apps/mobile/dist/
 apps/mobile/web-build/
