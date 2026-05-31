@@ -4,7 +4,7 @@ from earth2_sandbox.postprocessing import (
     FourCastNetPostProcessingError,
     FourCastNetPostProcessor,
 )
-from earth2_sandbox.providers.base import ForecastProviderUnavailableError
+from earth2_sandbox.providers.base import ForecastProviderResult, ForecastProviderUnavailableError
 from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSummary
 from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,
@@ -45,6 +45,17 @@ class FourCastNetForecastProvider:
         )
 
     async def get_point_forecast(self, latitude: float, longitude: float) -> ForecastSummary:
+        result = await self.get_point_forecast_with_diagnostics(
+            latitude=latitude,
+            longitude=longitude,
+        )
+        return result.summary
+
+    async def get_point_forecast_with_diagnostics(
+        self,
+        latitude: float,
+        longitude: float,
+    ) -> ForecastProviderResult:
         status = await self.get_status()
         if not status.supports_point_forecast:
             detail = (
@@ -67,11 +78,15 @@ class FourCastNetForecastProvider:
                     "Hosted FourCastNet returned a large asset marker instead of tar bytes. "
                     "No downloadable responseReference or Location header was available."
                 )
-            return self.post_processor.build_forecast_summary_from_hosted_result(
+            summary = self.post_processor.build_forecast_summary_from_hosted_result(
                 result=result,
                 request=request,
                 latitude=latitude,
                 longitude=longitude,
+            )
+            return ForecastProviderResult(
+                summary=summary,
+                diagnostics=self._build_result_diagnostics(result),
             )
         except ForecastProviderUnavailableError:
             raise
@@ -155,6 +170,23 @@ class FourCastNetForecastProvider:
             )
 
         return result.model_copy(update={"cache_status": "miss"})
+
+    def _build_result_diagnostics(
+        self,
+        result: FourCastNetHostedInferenceResult,
+    ) -> dict[str, object]:
+        return {
+            "provider": "fourcastnet",
+            "response_source": result.response_source,
+            "cache_status": result.cache_status,
+            "cached_tar_path": result.cached_tar_path,
+            "nvcf_request_id": result.nvcf_request_id,
+            "nvcf_status": result.nvcf_status,
+            "poll_attempts": result.poll_attempts,
+            "response_reference_present": result.response_reference_present,
+            "byte_length": result.byte_length,
+            "sha256": result.sha256,
+        }
 
 
 FourCastNetForecastService = FourCastNetForecastProvider

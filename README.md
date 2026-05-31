@@ -77,6 +77,7 @@ python -m uvicorn earth2_sandbox.main:app --reload
 - API 인덱스: http://127.0.0.1:8000/
 - 예보 provider 상태: http://127.0.0.1:8000/api/v1/forecast/provider/status
 - 점 예보: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
+- queued 예보 job 생성: `POST http://127.0.0.1:8000/api/v1/forecast/jobs`
 - 예전 prototype 호환 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
 
@@ -99,6 +100,9 @@ EARTH2_FOURCASTNET_CACHE_DIR=./data/cache/fourcastnet
 `EARTH2_FORECAST_PROVIDER=fourcastnet`와 hosted API key가 설정되어 있으면 기존 sample forecast 엔드포인트도 hosted FourCastNet tar 결과를 호출한 뒤 특정 위도/경도에 가장 가까운 격자점을 샘플링하여 `ForecastSummary` 형태로 반환합니다.
 
 - Point forecast: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
+- Queued forecast job: http://127.0.0.1:8000/api/v1/forecast/jobs
+
+`POST /api/v1/forecast/jobs`는 장시간 hosted 호출을 대비한 첫 job 계약입니다. 응답은 즉시 `queued` 상태와 job id를 반환하고, 백그라운드 worker가 forecast provider를 호출한 뒤 `GET /api/v1/forecast/jobs/{job_id}`에서 `running`, `succeeded`, `failed` 상태와 forecast/diagnostics를 확인할 수 있게 합니다. 현재 구현은 프로세스 내 in-memory queue VIP이며, 계약이 안정되면 Redis/Celery 또는 별도 worker 서비스로 교체할 수 있는 경계로 분리되어 있습니다.
 
 실제 NVIDIA API key는 `.env`에만 저장하고 GitHub에는 올리지 않습니다. 샘플 tar 응답 파일을 받은 경우에도 `data/` 아래 로컬 파일로만 보관하고 커밋하지 않습니다.
 

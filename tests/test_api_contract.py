@@ -38,6 +38,7 @@ def test_index_contract() -> None:
     assert body["links"]["docs"] == "/docs"
     assert body["links"]["provider_status"] == "/api/v1/forecast/provider/status"
     assert body["links"]["point_forecast"].startswith("/api/v1/forecast/point")
+    assert body["links"]["forecast_jobs"] == "/api/v1/forecast/jobs"
 
 
 def test_health_allows_local_mobile_preview_origin() -> None:
@@ -63,6 +64,38 @@ def test_point_forecast_contract() -> None:
     )
 
     assert_forecast_contract(response)
+
+
+def test_forecast_job_contract() -> None:
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["latitude"] == 37.5665
+    assert body["longitude"] == 126.9780
+    assert body["forecast"] is None
+    assert body["links"]["self"].startswith("/api/v1/forecast/jobs/")
+
+    job_response = client.get(body["links"]["self"])
+
+    assert job_response.status_code == 200
+    job = job_response.json()
+    assert job["id"] == body["id"]
+    assert job["status"] == "succeeded"
+    assert job["forecast"]["provider"] == "mock"
+    assert job["diagnostics"]["provider"] == "mock"
+    assert job["diagnostics"]["message"] == "Forecast summary is ready."
+
+
+def test_forecast_job_missing_id_returns_404() -> None:
+    response = client.get("/api/v1/forecast/jobs/missing")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Forecast job not found."
 
 
 def assert_forecast_contract(response) -> None:
