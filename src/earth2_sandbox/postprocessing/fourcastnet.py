@@ -138,6 +138,12 @@ class FourCastNetPostProcessor:
         generated_at: datetime | None = None,
     ) -> ForecastSummary:
         if self._detect_format(result.content_type) != "tar":
+            if result.large_asset_message:
+                raise FourCastNetPostProcessingError(
+                    "Hosted FourCastNet returned a large-asset marker without a tar body. "
+                    "A downloadable result URL or a local sample tar is required "
+                    "for point sampling."
+                )
             raise FourCastNetPostProcessingError(
                 f"Point forecast sampling requires tar output, got {result.content_type!r}."
             )
