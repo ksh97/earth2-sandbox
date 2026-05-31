@@ -152,6 +152,12 @@ The file-backed store is not a distributed queue, but it keeps hosted-call diagn
 across backend restarts and creates a simple migration path toward Redis, a database,
 or a worker service.
 
+`GET /api/v1/forecast/jobs?limit=20&status=succeeded`
+
+Returns recent job summaries sorted by creation time. The optional `status` filter accepts
+`queued`, `running`, `succeeded`, or `failed`. List responses intentionally omit the full
+forecast payload so a UI can poll recent jobs cheaply.
+
 `GET /api/v1/forecast/jobs/{job_id}`
 
 Returns the job state:
@@ -165,6 +171,11 @@ The job response includes a `diagnostics` object. Mock providers return minimal 
 diagnostics. FourCastNet jobs can expose backend-only operational facts such as response
 source, cache status, polling count, NVCF request id/status, and byte length. API keys and
 download URLs are never exposed.
+
+Full job responses also include an `events` array. Events record lifecycle transitions such as
+accepted, provider request started, forecast summary ready, or failure. This is a small local
+event-history boundary that can later move to durable event storage without changing the mobile
+contract.
 
 `GET /api/v1/forecast/sample?latitude=37.5665&longitude=126.9780`
 

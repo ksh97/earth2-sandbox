@@ -11,7 +11,14 @@ from earth2_sandbox.providers import (
     ForecastProviderResult,
     ForecastProviderUnavailableError,
 )
-from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics
+from earth2_sandbox.schemas.jobs import (
+    ForecastJob,
+    ForecastJobDiagnostics,
+    ForecastJobEvent,
+    ForecastJobListResponse,
+    ForecastJobStatus,
+    ForecastJobSummary,
+)
 
 
 class ForecastJobNotFoundError(KeyError):
@@ -24,6 +31,13 @@ class ForecastJobStore(Protocol):
     async def get(self, job_id: str) -> ForecastJob: ...
 
     async def update(self, job: ForecastJob) -> ForecastJob: ...
+
+    async def list_recent(
+        self,
+        *,
+        limit: int,
+        status: ForecastJobStatus | None = None,
+    ) -> list[ForecastJob]: ...
 
 
 class DiagnosticForecastProvider(Protocol):
@@ -56,6 +70,13 @@ class InMemoryForecastJobStore:
             created_at=now,
             updated_at=now,
             diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
+            events=[
+                ForecastJobEvent(
+                    occurred_at=now,
+                    status="queued",
+                    message="Forecast job accepted.",
+                )
+            ],
         )
         async with self._lock:
             self._jobs[job.id] = job
@@ -75,6 +96,16 @@ class InMemoryForecastJobStore:
                 raise ForecastJobNotFoundError(next_job.id)
             self._jobs[next_job.id] = next_job
         return next_job
+
+    async def list_recent(
+        self,
+        *,
+        limit: int,
+        status: ForecastJobStatus | None = None,
+    ) -> list[ForecastJob]:
+        async with self._lock:
+            jobs = list(self._jobs.values())
+        return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
 
 
 class FileForecastJobStore:
@@ -99,6 +130,13 @@ class FileForecastJobStore:
             created_at=now,
             updated_at=now,
             diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
+            events=[
+                ForecastJobEvent(
+                    occurred_at=now,
+                    status="queued",
+                    message="Forecast job accepted.",
+                )
+            ],
         )
         async with self._lock:
             self._write(job)
@@ -118,6 +156,22 @@ class FileForecastJobStore:
                 raise ForecastJobNotFoundError(next_job.id)
             self._write(next_job)
         return next_job
+
+    async def list_recent(
+        self,
+        *,
+        limit: int,
+        status: ForecastJobStatus | None = None,
+    ) -> list[ForecastJob]:
+        async with self._lock:
+            jobs: list[ForecastJob] = []
+            if self.root.exists():
+                for path in self.root.glob("*.json"):
+                    try:
+                        jobs.append(ForecastJob.model_validate_json(path.read_text("utf-8")))
+                    except ValueError:
+                        continue
+        return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
 
     def _path(self, job_id: str) -> Path:
         return self.root / f"{job_id}.json"
@@ -149,10 +203,20 @@ class ForecastJobService:
     async def get_job(self, job_id: str) -> ForecastJob:
         return self._with_links(await self.store.get(job_id))
 
+    async def list_recent_jobs(
+        self,
+        *,
+        limit: int,
+        status: ForecastJobStatus | None = None,
+    ) -> ForecastJobListResponse:
+        jobs = await self.store.list_recent(limit=limit, status=status)
+        summaries = [self._to_summary(self._with_links(job)) for job in jobs]
+        return ForecastJobListResponse(count=len(summaries), jobs=summaries)
+
     async def run_job(self, job_id: str) -> None:
         job = await self.store.get(job_id)
         now = datetime.now(UTC)
-        await self.store.update(
+        running_job = self._append_event(
             job.model_copy(
                 update={
                     "status": "running",
@@ -163,8 +227,12 @@ class ForecastJobService:
                     ),
                     "error": None,
                 }
-            )
+            ),
+            status="running",
+            message="Forecast provider request started.",
+            occurred_at=now,
         )
+        await self.store.update(running_job)
 
         try:
             provider_result = await self._get_provider_result(job)
@@ -176,19 +244,24 @@ class ForecastJobService:
             completed = datetime.now(UTC)
             current = await self.store.get(job_id)
             await self.store.update(
-                current.model_copy(
-                    update={
-                        "status": "succeeded",
-                        "completed_at": completed,
-                        "forecast": provider_result.summary,
-                        "diagnostics": ForecastJobDiagnostics(
-                            **{
-                                **provider_result.diagnostics,
-                                "message": "Forecast summary is ready.",
-                            }
-                        ),
-                        "error": None,
-                    }
+                self._append_event(
+                    current.model_copy(
+                        update={
+                            "status": "succeeded",
+                            "completed_at": completed,
+                            "forecast": provider_result.summary,
+                            "diagnostics": ForecastJobDiagnostics(
+                                **{
+                                    **provider_result.diagnostics,
+                                    "message": "Forecast summary is ready.",
+                                }
+                            ),
+                            "error": None,
+                        }
+                    ),
+                    status="succeeded",
+                    message="Forecast summary is ready.",
+                    occurred_at=completed,
                 )
             )
 
@@ -212,13 +285,17 @@ class ForecastJobService:
     async def _mark_failed(self, *, job_id: str, error: str) -> None:
         job = await self.store.get(job_id)
         await self.store.update(
-            job.model_copy(
-                update={
-                    "status": "failed",
-                    "completed_at": datetime.now(UTC),
-                    "error": error,
-                    "diagnostics": ForecastJobDiagnostics(message="Forecast job failed."),
-                }
+            self._append_event(
+                job.model_copy(
+                    update={
+                        "status": "failed",
+                        "completed_at": datetime.now(UTC),
+                        "error": error,
+                        "diagnostics": ForecastJobDiagnostics(message="Forecast job failed."),
+                    }
+                ),
+                status="failed",
+                message="Forecast job failed.",
             )
         )
 
@@ -234,3 +311,49 @@ class ForecastJobService:
                 }
             }
         )
+
+    def _append_event(
+        self,
+        job: ForecastJob,
+        *,
+        status: ForecastJobStatus,
+        message: str,
+        occurred_at: datetime | None = None,
+    ) -> ForecastJob:
+        return job.model_copy(
+            update={
+                "events": [
+                    *job.events,
+                    ForecastJobEvent(
+                        occurred_at=occurred_at or datetime.now(UTC),
+                        status=status,
+                        message=message,
+                    ),
+                ]
+            }
+        )
+
+    def _to_summary(self, job: ForecastJob) -> ForecastJobSummary:
+        return ForecastJobSummary(
+            id=job.id,
+            status=job.status,
+            latitude=job.latitude,
+            longitude=job.longitude,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+            completed_at=job.completed_at,
+            diagnostics=job.diagnostics,
+            error=job.error,
+            links=job.links,
+        )
+
+
+def _sort_and_filter_jobs(
+    *,
+    jobs: list[ForecastJob],
+    limit: int,
+    status: ForecastJobStatus | None,
+) -> list[ForecastJob]:
+    filtered = [job for job in jobs if status is None or job.status == status]
+    filtered.sort(key=lambda job: (job.created_at, job.id), reverse=True)
+    return filtered[:limit]

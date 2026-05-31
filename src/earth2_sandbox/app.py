@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,7 +14,12 @@ from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,
     FourCastNetHostedInferenceResult,
 )
-from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobCreateRequest
+from earth2_sandbox.schemas.jobs import (
+    ForecastJob,
+    ForecastJobCreateRequest,
+    ForecastJobListResponse,
+    ForecastJobStatus,
+)
 from earth2_sandbox.services.jobs import (
     FileForecastJobStore,
     ForecastJobNotFoundError,
@@ -123,6 +130,16 @@ def create_app(
         )
         background_tasks.add_task(forecast_job_service.run_job, job.id)
         return job
+
+    @app.get("/api/v1/forecast/jobs", response_model=ForecastJobListResponse)
+    async def list_forecast_jobs(
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        job_status: Annotated[ForecastJobStatus | None, Query(alias="status")] = None,
+    ) -> ForecastJobListResponse:
+        return await forecast_job_service.list_recent_jobs(
+            limit=limit,
+            status=job_status,
+        )
 
     @app.get("/api/v1/forecast/jobs/{job_id}", response_model=ForecastJob)
     async def get_forecast_job(job_id: str) -> ForecastJob:

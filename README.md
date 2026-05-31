@@ -103,8 +103,9 @@ EARTH2_FORECAST_JOB_STORE_DIR=./data/jobs
 
 - Point forecast: http://127.0.0.1:8000/api/v1/forecast/point?latitude=37.5665&longitude=126.9780
 - Queued forecast job: http://127.0.0.1:8000/api/v1/forecast/jobs
+- Recent forecast jobs: http://127.0.0.1:8000/api/v1/forecast/jobs?limit=20
 
-`POST /api/v1/forecast/jobs`는 장시간 hosted 호출을 대비한 첫 job 계약입니다. 응답은 즉시 `queued` 상태와 job id를 반환하고, 백그라운드 worker가 forecast provider를 호출한 뒤 `GET /api/v1/forecast/jobs/{job_id}`에서 `running`, `succeeded`, `failed` 상태와 forecast/diagnostics를 확인할 수 있게 합니다. 기본 구현은 프로세스 내 in-memory queue VIP입니다. 실제 hosted 호출을 관찰할 때는 `EARTH2_FORECAST_JOB_STORE_BACKEND=file`로 바꾸면 `EARTH2_FORECAST_JOB_STORE_DIR` 아래에 job 상태와 diagnostics가 JSON 파일로 남습니다. 계약이 안정되면 Redis/Celery 또는 별도 worker 서비스로 교체할 수 있는 경계로 분리되어 있습니다.
+`POST /api/v1/forecast/jobs`는 장시간 hosted 호출을 대비한 첫 job 계약입니다. 응답은 즉시 `queued` 상태와 job id를 반환하고, 백그라운드 worker가 forecast provider를 호출한 뒤 `GET /api/v1/forecast/jobs/{job_id}`에서 `running`, `succeeded`, `failed` 상태와 forecast/diagnostics/event history를 확인할 수 있게 합니다. `GET /api/v1/forecast/jobs?limit=20&status=succeeded`로 최근 job 목록도 조회할 수 있습니다. 기본 구현은 프로세스 내 in-memory queue VIP입니다. 실제 hosted 호출을 관찰할 때는 `EARTH2_FORECAST_JOB_STORE_BACKEND=file`로 바꾸면 `EARTH2_FORECAST_JOB_STORE_DIR` 아래에 job 상태와 diagnostics가 JSON 파일로 남습니다. 계약이 안정되면 Redis/Celery 또는 별도 worker 서비스로 교체할 수 있는 경계로 분리되어 있습니다.
 
 실제 NVIDIA API key는 `.env`에만 저장하고 GitHub에는 올리지 않습니다. 샘플 tar 응답 파일을 받은 경우에도 `data/` 아래 로컬 파일로만 보관하고 커밋하지 않습니다.
 
