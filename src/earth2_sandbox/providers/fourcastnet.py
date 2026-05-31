@@ -10,6 +10,7 @@ from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,
     FourCastNetHostedInferenceResult,
 )
+from earth2_sandbox.storage import FourCastNetResultCache
 
 
 class FourCastNetForecastProvider:
@@ -19,9 +20,11 @@ class FourCastNetForecastProvider:
         self,
         client: FourCastNetNimClient,
         post_processor: FourCastNetPostProcessor | None = None,
+        result_cache: FourCastNetResultCache | None = None,
     ):
         self.client = client
         self.post_processor = post_processor or FourCastNetPostProcessor()
+        self.result_cache = result_cache
 
     async def get_status(self) -> ForecastProviderStatus:
         status = await self.client.get_readiness_status()
@@ -58,11 +61,11 @@ class FourCastNetForecastProvider:
             accept="application/x-tar",
         )
         try:
-            result = await self.client.run_hosted_inference(request)
+            result = await self._run_hosted_inference_with_cache(request)
             if result.large_asset_message:
                 raise ForecastProviderUnavailableError(
                     "Hosted FourCastNet returned a large asset marker instead of tar bytes. "
-                    "Output asset download via NVCF polling or redirect handling is not wired yet."
+                    "No downloadable responseReference or Location header was available."
                 )
             return self.post_processor.build_forecast_summary_from_hosted_result(
                 result=result,
@@ -85,7 +88,7 @@ class FourCastNetForecastProvider:
             )
 
         try:
-            result = await self.client.run_hosted_inference(request)
+            result = await self._run_hosted_inference_with_cache(request)
         except FourCastNetInferenceError as error:
             raise ForecastProviderUnavailableError(str(error)) from error
 
@@ -101,6 +104,57 @@ class FourCastNetForecastProvider:
                 "post_processing": self.post_processor.describe_hosted_result(result_without_raw),
             },
         )
+
+    async def _run_hosted_inference_with_cache(
+        self,
+        request: FourCastNetHostedInferenceRequest,
+    ) -> FourCastNetHostedInferenceResult:
+        request_payload = self.client.build_hosted_inference_payload(
+            input_id=request.input_id,
+            variables=request.variables,
+            simulation_length=request.simulation_length,
+            ensemble_size=request.ensemble_size,
+            noise_amplitude=request.noise_amplitude,
+        )
+
+        if self.result_cache:
+            cached = self.result_cache.load(
+                request_payload=request_payload,
+                accept=request.accept,
+            )
+            if cached:
+                content, record = cached
+                return FourCastNetHostedInferenceResult(
+                    endpoint=self.client.base_url,
+                    status_code=200,
+                    content_type=record.content_type,
+                    byte_length=record.byte_length,
+                    sha256=record.sha256,
+                    request_payload=request_payload,
+                    response_source="cache",
+                    cache_status="hit",
+                    cached_tar_path=str(record.path),
+                    raw_content=content,
+                )
+
+        result = await self.client.run_hosted_inference(request)
+        if not self.result_cache:
+            return result.model_copy(update={"cache_status": "disabled"})
+
+        record = self.result_cache.save(
+            request_payload=request_payload,
+            accept=request.accept,
+            result=result,
+        )
+        if record:
+            return result.model_copy(
+                update={
+                    "cache_status": "stored",
+                    "cached_tar_path": str(record.path),
+                }
+            )
+
+        return result.model_copy(update={"cache_status": "miss"})
 
 
 FourCastNetForecastService = FourCastNetForecastProvider

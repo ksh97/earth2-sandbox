@@ -136,6 +136,15 @@ def check_env_files(doctor: Doctor) -> None:
     else:
         doctor.warn("backend env", "EARTH2_NVIDIA_API_KEY is empty; hosted mode will not run.")
 
+    cache_dir = root_env.get("EARTH2_FOURCASTNET_CACHE_DIR", "./data/cache/fourcastnet")
+    doctor.ok("backend env", f"EARTH2_FOURCASTNET_CACHE_DIR={cache_dir}")
+    if Path(cache_dir).is_absolute():
+        resolved_cache_dir = Path(cache_dir)
+    else:
+        resolved_cache_dir = REPO_ROOT / cache_dir
+    if not _is_under(resolved_cache_dir, REPO_ROOT):
+        doctor.warn("backend env", "FourCastNet cache dir is outside the repository workspace.")
+
     mobile_api = mobile_env.get("EXPO_PUBLIC_API_BASE_URL")
     if mobile_api:
         doctor.ok("mobile env", f"EXPO_PUBLIC_API_BASE_URL={mobile_api}")
@@ -230,6 +239,14 @@ def rel(path: Path) -> str:
         return str(path.relative_to(REPO_ROOT))
     except ValueError:
         return str(path)
+
+
+def _is_under(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 if __name__ == "__main__":

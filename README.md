@@ -86,6 +86,8 @@ Hosted NVIDIA API 실험을 할 때는 `.env`에서 다음 값을 설정한 뒤 
 EARTH2_FORECAST_PROVIDER=fourcastnet
 EARTH2_FOURCASTNET_ENDPOINT_MODE=hosted
 EARTH2_NVIDIA_API_KEY=your_nvidia_api_key
+EARTH2_FOURCASTNET_CACHE_ENABLED=true
+EARTH2_FOURCASTNET_CACHE_DIR=./data/cache/fourcastnet
 ```
 
 첫 hosted inference adapter는 다음 엔드포인트로 호출할 수 있습니다.
@@ -106,7 +108,16 @@ Hosted API smoke test는 다음 명령으로 실행할 수 있습니다. 이 스
 .\.venv\Scripts\python.exe tools\smoke_hosted_fourcastnet.py
 ```
 
-현재 hosted API가 tar 본문 대신 `{"message": "Large asset written"}` JSON marker를 반환할 수 있습니다. 이 경우 API key와 요청 자체는 동작하지만, point forecast 샘플링을 완료하려면 다운로드 가능한 tar URL 또는 로컬 샘플 tar 파일이 추가로 필요합니다.
+Hosted API가 tar 본문을 즉시 반환하지 않으면 backend client는 NVCF request id로 status endpoint를 polling하고, `302 Location` 또는 JSON `responseReference`가 제공될 때 큰 결과물을 다운로드합니다. 다운로드된 tar는 `EARTH2_FOURCASTNET_CACHE_DIR` 아래에 요청 payload digest 기준으로 저장되어 같은 요청을 로컬에서 재현할 수 있습니다.
+
+저장된 tar 또는 `data/samples/`의 샘플 tar를 다시 디코딩해보려면 다음 명령을 사용합니다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\replay_fourcastnet_sample.py
+.\.venv\Scripts\python.exe tools\replay_fourcastnet_sample.py data\samples\example.tar
+```
+
+현재 hosted API가 tar 본문, `302 Location`, 또는 JSON `responseReference` 없이 `{"message": "Large asset written"}` JSON marker만 반환할 수 있습니다. 이 경우 API key와 요청 자체는 동작하지만, point forecast 샘플링을 완료하려면 다운로드 가능한 tar 참조가 필요합니다.
 
 ## 모바일 앱 시작
 

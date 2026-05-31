@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 
 HostedFourCastNetVariable = Literal["w10m", "t2m", "msl", "tcwv", "z500"]
 HostedFourCastNetAccept = Literal["application/json", "application/x-tar"]
+FourCastNetResponseSource = Literal["inline", "poll", "redirect", "response_reference", "cache"]
+FourCastNetCacheStatus = Literal["disabled", "hit", "miss", "stored"]
 
 
 class FourCastNetHostedInferenceRequest(BaseModel):
@@ -31,6 +33,11 @@ class FourCastNetHostedInferenceResult(BaseModel):
     nvcf_request_id: str | None = None
     nvcf_status: str | None = None
     large_asset_message: str | None = None
+    poll_attempts: int = 0
+    response_source: FourCastNetResponseSource = "inline"
+    response_reference_present: bool = False
+    cache_status: FourCastNetCacheStatus = "disabled"
+    cached_tar_path: str | None = None
     raw_content: bytes | None = Field(default=None, exclude=True, repr=False)
 
 

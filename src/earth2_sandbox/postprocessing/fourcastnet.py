@@ -92,6 +92,10 @@ class FourCastNetPostProcessor:
             notes=[
                 f"Captured {result.byte_length} bytes from hosted FourCastNet.",
                 f"Response digest is {result.sha256}.",
+                (
+                    f"Response source is {result.response_source}; "
+                    f"cache status is {result.cache_status}."
+                ),
                 *decoded_note,
                 "Raw model output is intentionally not exposed directly to mobile clients.",
             ],
