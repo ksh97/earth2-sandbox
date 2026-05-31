@@ -11,6 +11,7 @@ import { AppHeader } from "../components/AppHeader";
 import { ErrorPanel } from "../components/ErrorPanel";
 import { ForecastDetails } from "../components/ForecastDetails";
 import { ForecastHero } from "../components/ForecastHero";
+import { ForecastJobPanel } from "../components/ForecastJobPanel";
 import { ForecastOverview } from "../components/ForecastOverview";
 import { ForecastStatusPanel } from "../components/ForecastStatusPanel";
 import { LocationPanel } from "../components/LocationPanel";
@@ -24,8 +25,11 @@ export function ForecastScreen() {
     choosePreset,
     errorMessage,
     forecast,
+    forecastJob,
+    forecastJobPoll,
     forecastWindowEnd,
     generatedAt,
+    isJobPolling,
     isLoading,
     latitude,
     longitude,
@@ -76,6 +80,12 @@ export function ForecastScreen() {
           />
 
           {errorMessage ? <ErrorPanel message={errorMessage} /> : null}
+
+          <ForecastJobPanel
+            isPolling={isJobPolling}
+            job={forecastJob}
+            poll={forecastJobPoll}
+          />
 
           <ForecastStatusPanel
             forecast={forecast}

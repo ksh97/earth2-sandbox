@@ -1,6 +1,6 @@
 # Earth-2 Mobile Prototype
 
-This is the first Expo mobile prototype for the Earth-2 weather forecast app. It calls the FastAPI backend point forecast endpoint so the iOS and Android UI can evolve before FourCastNet NIM integration is ready.
+This is the first Expo mobile prototype for the Earth-2 weather forecast app. It creates queued forecast jobs through the FastAPI backend, polls lightweight job status, and fetches the completed forecast payload once the backend marks the job terminal.
 
 ## Requirements
 
@@ -32,6 +32,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - Forecast detail view with timeline steps, model metadata, and signal levels.
 - Mock backend API integration.
 - Backend provider status panel.
+- Queued forecast job status panel.
 - Runtime validation for backend forecast and provider status payloads.
 - Loading and error states.
 
