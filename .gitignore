@@ -31,6 +31,7 @@ logs/
 *.grib
 *.grib2
 *.tar
+!tests/fixtures/**/*.tar
 
 # Jupyter
 .ipynb_checkpoints/
