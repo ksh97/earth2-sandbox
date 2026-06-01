@@ -1,12 +1,9 @@
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from earth2_sandbox.domain.jobs.status import ForecastJobStatus, ForecastJobTerminalStatus
 from earth2_sandbox.schemas.forecast import ForecastSummary
-
-ForecastJobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
-ForecastJobTerminalStatus = Literal["succeeded", "failed", "cancelled"]
 
 
 class ForecastJobCreateRequest(BaseModel):
