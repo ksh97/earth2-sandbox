@@ -1,10 +1,25 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from earth2_sandbox.domain.jobs.entities import (
+    ForecastJobAttempt,
+    ForecastJobCoordinates,
+    ForecastJobIdentity,
+    InvalidForecastJobAttemptError,
+    InvalidForecastJobCoordinatesError,
+    InvalidForecastJobIdentityError,
+)
 from earth2_sandbox.domain.jobs.events import record_forecast_job_event
 from earth2_sandbox.domain.jobs.policies import (
     can_transition_from,
     should_cleanup_job,
     should_mark_job_stale,
+)
+from earth2_sandbox.domain.jobs.priority import (
+    DEFAULT_FORECAST_JOB_PRIORITY,
+    FORECAST_JOB_PRIORITY_RANK,
+    priority_rank,
 )
 from earth2_sandbox.domain.jobs.status import (
     ACTIVE_JOB_STATUSES,
@@ -27,6 +42,48 @@ def test_transition_policy_uses_expected_current_statuses() -> None:
     assert can_transition_from(current_status="queued", expected_statuses={"queued"})
     assert can_transition_from(current_status="running", expected_statuses={"queued", "running"})
     assert not can_transition_from(current_status="cancelled", expected_statuses={"running"})
+
+
+def test_job_identity_normalizes_uuid_values() -> None:
+    identity = ForecastJobIdentity.parse("A49B28EA-C6E3-462D-FE2A-098C5A4E49A8")
+
+    assert identity.value == "a49b28ea-c6e3-462d-fe2a-098c5a4e49a8"
+
+
+def test_job_identity_rejects_path_like_values() -> None:
+    with pytest.raises(InvalidForecastJobIdentityError):
+        ForecastJobIdentity.parse("../a49b28ea-c6e3-462d-fe2a-098c5a4e49a8")
+
+
+def test_job_coordinates_enforce_forecast_bounds() -> None:
+    coordinates = ForecastJobCoordinates(latitude=37.5665, longitude=126.978)
+
+    assert coordinates.latitude == 37.5665
+    assert coordinates.longitude == 126.978
+
+    with pytest.raises(InvalidForecastJobCoordinatesError):
+        ForecastJobCoordinates(latitude=91, longitude=126.978)
+
+
+def test_job_attempt_enforces_positive_attempts() -> None:
+    parent = ForecastJobIdentity.parse("a49b28ea-c6e3-462d-fe2a-098c5a4e49a8")
+    attempt = ForecastJobAttempt(value=2, parent_job_id=parent)
+
+    assert attempt.value == 2
+    assert attempt.parent_job_id == parent
+
+    with pytest.raises(InvalidForecastJobAttemptError):
+        ForecastJobAttempt(value=0)
+    with pytest.raises(InvalidForecastJobAttemptError):
+        ForecastJobAttempt(value=1, parent_job_id=parent)
+    with pytest.raises(InvalidForecastJobAttemptError):
+        ForecastJobAttempt(value=2)
+
+
+def test_job_priority_ranks_are_queue_ready_without_creating_a_queue() -> None:
+    assert DEFAULT_FORECAST_JOB_PRIORITY == "normal"
+    assert FORECAST_JOB_PRIORITY_RANK == {"high": 0, "normal": 10, "low": 20}
+    assert priority_rank("high") < priority_rank("normal") < priority_rank("low")
 
 
 def test_job_event_record_defaults_to_current_utc_timestamp() -> None:

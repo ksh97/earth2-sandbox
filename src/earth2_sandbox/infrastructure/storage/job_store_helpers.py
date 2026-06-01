@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from earth2_sandbox.application.errors import ForecastJobNotFoundError, ForecastJobTransitionError
+from earth2_sandbox.domain.jobs.entities import (
+    ForecastJobAttempt,
+    ForecastJobCoordinates,
+    ForecastJobIdentity,
+    InvalidForecastJobIdentityError,
+)
 from earth2_sandbox.domain.jobs.policies import can_transition_from
 from earth2_sandbox.domain.jobs.status import ForecastJobStatus
 from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics, ForecastJobEvent
@@ -17,15 +23,23 @@ def build_new_job(
     parent_job_id: str | None,
     attempt: int,
 ) -> ForecastJob:
+    coordinates = ForecastJobCoordinates(latitude=latitude, longitude=longitude)
+    parent_identity = (
+        ForecastJobIdentity.parse(parent_job_id) if parent_job_id is not None else None
+    )
+    job_attempt = ForecastJobAttempt(
+        value=attempt,
+        parent_job_id=parent_identity,
+    )
     now = datetime.now(UTC)
     message = "Forecast retry accepted." if parent_job_id else "Forecast job accepted."
     return ForecastJob(
         id=str(uuid4()),
         status="queued",
-        latitude=latitude,
-        longitude=longitude,
-        parent_job_id=parent_job_id,
-        attempt=attempt,
+        latitude=coordinates.latitude,
+        longitude=coordinates.longitude,
+        parent_job_id=parent_identity.value if parent_identity is not None else None,
+        attempt=job_attempt.value,
         created_at=now,
         updated_at=now,
         diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
@@ -41,11 +55,9 @@ def build_new_job(
 
 def normalize_job_id(job_id: str) -> str:
     try:
-        parsed = UUID(job_id)
-    except (TypeError, ValueError) as error:
+        return ForecastJobIdentity.parse(job_id).value
+    except InvalidForecastJobIdentityError as error:
         raise ForecastJobNotFoundError(job_id) from error
-
-    return str(parsed)
 
 
 def prepare_job_for_update(job: ForecastJob) -> ForecastJob:

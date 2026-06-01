@@ -52,9 +52,11 @@ Current backend layout:
 - `api/http/v1/routers/provider_status.py`: provider status route
 - `api/http/v1/routers/forecast_queries.py`: point/sample forecast and hosted inference routes
 - `api/http/v1/routers/forecast_jobs.py`: forecast job command/query HTTP routes
+- `domain/jobs/entities.py`: UUID-safe job identity, coordinate, and attempt value objects
 - `domain/jobs/status.py`: job lifecycle vocabulary shared by API schemas and services
 - `domain/jobs/events.py`: dependency-free job event record construction
 - `domain/jobs/policies.py`: transition, stale timeout, and cleanup decisions
+- `domain/jobs/priority.py`: queue-ready priority vocabulary without binding to a queue adapter
 - `application/errors.py`: application-level job errors shared by services and adapters
 - `application/ports/forecast_provider.py`: forecast provider port used by job commands
 - `application/ports/forecast_job_store.py`: job store port implemented by storage adapters
