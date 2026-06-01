@@ -3,6 +3,17 @@
 from earth2_sandbox.infrastructure.queue.asyncio_worker import (
     AsyncioTaskForecastJobWorker,
     DeferredForecastJobWorker,
+    QueuedAsyncioTaskForecastJobWorker,
+    QueuedDeferredForecastJobWorker,
+)
+from earth2_sandbox.infrastructure.queue.in_memory_priority_queue import (
+    InMemoryPriorityForecastQueue,
 )
 
-__all__ = ["AsyncioTaskForecastJobWorker", "DeferredForecastJobWorker"]
+__all__ = [
+    "AsyncioTaskForecastJobWorker",
+    "DeferredForecastJobWorker",
+    "InMemoryPriorityForecastQueue",
+    "QueuedAsyncioTaskForecastJobWorker",
+    "QueuedDeferredForecastJobWorker",
+]

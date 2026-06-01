@@ -2,7 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 
-from earth2_sandbox.infrastructure.queue import DeferredForecastJobWorker
+from earth2_sandbox.application.ports.forecast_queue import ForecastQueue
+from earth2_sandbox.infrastructure.queue import QueuedDeferredForecastJobWorker
 from earth2_sandbox.schemas.jobs import (
     ForecastJob,
     ForecastJobCleanupRequest,
@@ -19,13 +20,18 @@ from earth2_sandbox.services.jobs import (
 )
 
 
-def create_forecast_jobs_router(*, forecast_job_service: ForecastJobService) -> APIRouter:
+def create_forecast_jobs_router(
+    *,
+    forecast_job_service: ForecastJobService,
+    forecast_queue: ForecastQueue,
+) -> APIRouter:
     router = APIRouter(prefix="/api/v1/forecast/jobs", tags=["forecast-jobs"])
 
     def enqueue_job(background_tasks: BackgroundTasks, job_id: str) -> None:
-        worker = DeferredForecastJobWorker(
+        worker = QueuedDeferredForecastJobWorker(
             add_task=background_tasks.add_task,
             run_job=forecast_job_service.run_job,
+            queue=forecast_queue,
         )
         worker.enqueue(job_id)
 
