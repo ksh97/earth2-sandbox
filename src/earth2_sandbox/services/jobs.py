@@ -1,25 +1,26 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Protocol
-from uuid import UUID, uuid4
 
-from earth2_sandbox.domain.jobs.events import record_forecast_job_event
-from earth2_sandbox.domain.jobs.policies import (
-    can_transition_from,
-    should_cleanup_job,
-    should_mark_job_stale,
+from earth2_sandbox.application.errors import (
+    ForecastJobConflictError,
+    ForecastJobNotFoundError,
+    ForecastJobTransitionError,
 )
+from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
+from earth2_sandbox.domain.jobs.events import record_forecast_job_event
+from earth2_sandbox.domain.jobs.policies import should_mark_job_stale
 from earth2_sandbox.domain.jobs.status import (
     ACTIVE_JOB_STATUSES,
-    ALL_JOB_STATUSES,
     TERMINAL_JOB_STATUSES,
     ForecastJobStatus,
     ForecastJobTerminalStatus,
+)
+from earth2_sandbox.infrastructure.storage import (
+    FileForecastJobStore,
+    InMemoryForecastJobStore,
 )
 from earth2_sandbox.providers import (
     ForecastProvider,
@@ -37,33 +38,16 @@ from earth2_sandbox.schemas.jobs import (
 )
 from earth2_sandbox.workers import ForecastJobWorker
 
-
-class ForecastJobNotFoundError(KeyError):
-    """Raised when a forecast job id is unknown to the configured job store."""
-
-
-class ForecastJobConflictError(RuntimeError):
-    """Raised when a job state transition is not valid for the current status."""
-
-
-class ForecastJobTransitionError(ForecastJobConflictError):
-    """Raised when a conditional job update observes a different current status."""
-
-    def __init__(
-        self,
-        *,
-        job_id: str,
-        current_status: ForecastJobStatus,
-        expected_statuses: Collection[ForecastJobStatus],
-    ) -> None:
-        self.job_id = job_id
-        self.current_status = current_status
-        self.expected_statuses = frozenset(expected_statuses)
-        expected = ", ".join(sorted(self.expected_statuses))
-        super().__init__(
-            f"Cannot transition forecast job {job_id} from {current_status}; "
-            f"expected one of: {expected}."
-        )
+__all__ = [
+    "FileForecastJobStore",
+    "ForecastJobConflictError",
+    "ForecastJobNotFoundError",
+    "ForecastJobRecoveryReport",
+    "ForecastJobService",
+    "ForecastJobStore",
+    "ForecastJobTransitionError",
+    "InMemoryForecastJobStore",
+]
 
 
 @dataclass(frozen=True)
@@ -74,278 +58,12 @@ class ForecastJobRecoveryReport:
     skipped_count: int
 
 
-class ForecastJobStore(Protocol):
-    async def create(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        parent_job_id: str | None = None,
-        attempt: int = 1,
-    ) -> ForecastJob: ...
-
-    async def get(self, job_id: str) -> ForecastJob: ...
-
-    async def update(self, job: ForecastJob) -> ForecastJob: ...
-
-    async def update_if_status(
-        self,
-        job: ForecastJob,
-        *,
-        expected_statuses: Collection[ForecastJobStatus],
-    ) -> ForecastJob: ...
-
-    async def list_recent(
-        self,
-        *,
-        limit: int,
-        status: ForecastJobStatus | None = None,
-    ) -> list[ForecastJob]: ...
-
-    async def list_active(self) -> list[ForecastJob]: ...
-
-    async def delete_older_than(
-        self,
-        *,
-        cutoff: datetime,
-        statuses: set[ForecastJobTerminalStatus],
-    ) -> int: ...
-
-
 class DiagnosticForecastProvider(Protocol):
     async def get_point_forecast_with_diagnostics(
         self,
         latitude: float,
         longitude: float,
     ) -> ForecastProviderResult: ...
-
-
-class InMemoryForecastJobStore:
-    """Small process-local job store.
-
-    This is the VIP boundary for the queued job contract. It is intentionally
-    replaceable by Redis, a database, or a real task queue once the contract is
-    stable.
-    """
-
-    def __init__(self) -> None:
-        self._jobs: dict[str, ForecastJob] = {}
-        self._lock = asyncio.Lock()
-
-    async def create(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        parent_job_id: str | None = None,
-        attempt: int = 1,
-    ) -> ForecastJob:
-        job = _build_new_job(
-            latitude=latitude,
-            longitude=longitude,
-            parent_job_id=parent_job_id,
-            attempt=attempt,
-        )
-        async with self._lock:
-            self._jobs[job.id] = job
-        return job
-
-    async def get(self, job_id: str) -> ForecastJob:
-        normalized_job_id = _normalize_job_id(job_id)
-        async with self._lock:
-            job = self._jobs.get(normalized_job_id)
-        if job is None:
-            raise ForecastJobNotFoundError(job_id)
-        return job
-
-    async def update(self, job: ForecastJob) -> ForecastJob:
-        return await self.update_if_status(job, expected_statuses=ALL_JOB_STATUSES)
-
-    async def update_if_status(
-        self,
-        job: ForecastJob,
-        *,
-        expected_statuses: Collection[ForecastJobStatus],
-    ) -> ForecastJob:
-        next_job = _prepare_job_for_update(job)
-        async with self._lock:
-            current = self._jobs.get(next_job.id)
-            if current is None:
-                raise ForecastJobNotFoundError(next_job.id)
-            _ensure_transition_allowed(current=current, expected_statuses=expected_statuses)
-            self._jobs[next_job.id] = next_job
-        return next_job
-
-    async def list_recent(
-        self,
-        *,
-        limit: int,
-        status: ForecastJobStatus | None = None,
-    ) -> list[ForecastJob]:
-        async with self._lock:
-            jobs = list(self._jobs.values())
-        return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
-
-    async def list_active(self) -> list[ForecastJob]:
-        async with self._lock:
-            jobs = list(self._jobs.values())
-        return _sort_jobs([job for job in jobs if job.status in ACTIVE_JOB_STATUSES])
-
-    async def delete_older_than(
-        self,
-        *,
-        cutoff: datetime,
-        statuses: set[ForecastJobTerminalStatus],
-    ) -> int:
-        async with self._lock:
-            job_ids = [
-                job.id
-                for job in self._jobs.values()
-                if should_cleanup_job(
-                    status=job.status,
-                    completed_at=job.completed_at,
-                    updated_at=job.updated_at,
-                    cutoff=cutoff,
-                    statuses=statuses,
-                )
-            ]
-            for job_id in job_ids:
-                del self._jobs[job_id]
-        return len(job_ids)
-
-
-class FileForecastJobStore:
-    """Filesystem-backed job store for local hosted-result observation.
-
-    Jobs are stored as one JSON file per job id. This is intentionally simple:
-    it preserves diagnostics across backend restarts without introducing Redis
-    or a database before the job contract settles.
-    """
-
-    def __init__(self, root: str | Path) -> None:
-        self.root = Path(root)
-        self._lock = asyncio.Lock()
-
-    async def create(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        parent_job_id: str | None = None,
-        attempt: int = 1,
-    ) -> ForecastJob:
-        job = _build_new_job(
-            latitude=latitude,
-            longitude=longitude,
-            parent_job_id=parent_job_id,
-            attempt=attempt,
-        )
-        async with self._lock:
-            self._write(job)
-        return job
-
-    async def get(self, job_id: str) -> ForecastJob:
-        async with self._lock:
-            path = self._path(job_id)
-            if not path.exists():
-                raise ForecastJobNotFoundError(job_id)
-            return ForecastJob.model_validate_json(path.read_text(encoding="utf-8"))
-
-    async def update(self, job: ForecastJob) -> ForecastJob:
-        return await self.update_if_status(job, expected_statuses=ALL_JOB_STATUSES)
-
-    async def update_if_status(
-        self,
-        job: ForecastJob,
-        *,
-        expected_statuses: Collection[ForecastJobStatus],
-    ) -> ForecastJob:
-        next_job = _prepare_job_for_update(job)
-        async with self._lock:
-            path = self._path(next_job.id)
-            if not path.exists():
-                raise ForecastJobNotFoundError(next_job.id)
-            current = ForecastJob.model_validate_json(path.read_text(encoding="utf-8"))
-            _ensure_transition_allowed(current=current, expected_statuses=expected_statuses)
-            self._write(next_job)
-        return next_job
-
-    async def list_recent(
-        self,
-        *,
-        limit: int,
-        status: ForecastJobStatus | None = None,
-    ) -> list[ForecastJob]:
-        async with self._lock:
-            jobs = self._read_all_unlocked()
-        return _sort_and_filter_jobs(jobs=jobs, limit=limit, status=status)
-
-    async def list_active(self) -> list[ForecastJob]:
-        async with self._lock:
-            jobs = self._read_all_unlocked()
-        return _sort_jobs([job for job in jobs if job.status in ACTIVE_JOB_STATUSES])
-
-    async def delete_older_than(
-        self,
-        *,
-        cutoff: datetime,
-        statuses: set[ForecastJobTerminalStatus],
-    ) -> int:
-        deleted_count = 0
-        async with self._lock:
-            if not self.root.exists():
-                return 0
-
-            for path in self.root.glob("*.json"):
-                try:
-                    job = ForecastJob.model_validate_json(path.read_text("utf-8"))
-                except ValueError:
-                    continue
-
-                if not should_cleanup_job(
-                    status=job.status,
-                    completed_at=job.completed_at,
-                    updated_at=job.updated_at,
-                    cutoff=cutoff,
-                    statuses=statuses,
-                ):
-                    continue
-
-                path.unlink()
-                deleted_count += 1
-        return deleted_count
-
-    def _path(self, job_id: str) -> Path:
-        normalized_job_id = _normalize_job_id(job_id)
-        root = self.root.resolve()
-        target = (root / f"{normalized_job_id}.json").resolve()
-        try:
-            target.relative_to(root)
-        except ValueError as error:
-            raise ForecastJobNotFoundError(job_id) from error
-        return target
-
-    def _write(self, job: ForecastJob) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        target = self._path(job.id)
-        temporary = target.with_suffix(".json.tmp")
-        temporary.write_text(
-            job.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
-        temporary.replace(target)
-
-    def _read_all_unlocked(self) -> list[ForecastJob]:
-        if not self.root.exists():
-            return []
-
-        jobs: list[ForecastJob] = []
-        for path in self.root.glob("*.json"):
-            try:
-                jobs.append(ForecastJob.model_validate_json(path.read_text("utf-8")))
-            except ValueError:
-                continue
-        return jobs
 
 
 class ForecastJobService:
@@ -718,76 +436,3 @@ class ForecastJobService:
             latest_event=job.events[-1] if job.events else None,
             links=job.links,
         )
-
-
-def _sort_and_filter_jobs(
-    *,
-    jobs: list[ForecastJob],
-    limit: int,
-    status: ForecastJobStatus | None,
-) -> list[ForecastJob]:
-    filtered = [job for job in jobs if status is None or job.status == status]
-    return _sort_jobs(filtered)[:limit]
-
-
-def _sort_jobs(jobs: list[ForecastJob]) -> list[ForecastJob]:
-    return sorted(jobs, key=lambda job: (job.created_at, job.id), reverse=True)
-
-
-def _normalize_job_id(job_id: str) -> str:
-    try:
-        parsed = UUID(job_id)
-    except (TypeError, ValueError) as error:
-        raise ForecastJobNotFoundError(job_id) from error
-
-    return str(parsed)
-
-
-def _prepare_job_for_update(job: ForecastJob) -> ForecastJob:
-    normalized_job_id = _normalize_job_id(job.id)
-    return job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
-
-
-def _ensure_transition_allowed(
-    *,
-    current: ForecastJob,
-    expected_statuses: Collection[ForecastJobStatus],
-) -> None:
-    if not can_transition_from(
-        current_status=current.status,
-        expected_statuses=expected_statuses,
-    ):
-        raise ForecastJobTransitionError(
-            job_id=current.id,
-            current_status=current.status,
-            expected_statuses=expected_statuses,
-        )
-
-
-def _build_new_job(
-    *,
-    latitude: float,
-    longitude: float,
-    parent_job_id: str | None,
-    attempt: int,
-) -> ForecastJob:
-    now = datetime.now(UTC)
-    message = "Forecast retry accepted." if parent_job_id else "Forecast job accepted."
-    return ForecastJob(
-        id=str(uuid4()),
-        status="queued",
-        latitude=latitude,
-        longitude=longitude,
-        parent_job_id=parent_job_id,
-        attempt=attempt,
-        created_at=now,
-        updated_at=now,
-        diagnostics=ForecastJobDiagnostics(message="Waiting for forecast worker."),
-        events=[
-            ForecastJobEvent(
-                occurred_at=now,
-                status="queued",
-                message=message,
-            )
-        ],
-    )
