@@ -82,6 +82,13 @@ Current backend layout:
 - `workers.py`: compatibility exports for worker ports and local adapters
 - `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
 
+Shared contracts:
+
+- `contracts/openapi/earth2-api.v1.yaml`: snapshotted OpenAPI document for the mobile/API boundary
+- `tests/contract/test_openapi_snapshot.py`: fails when FastAPI's generated OpenAPI differs from the committed snapshot
+- `tests/contract/test_http_api_v1.py`: verifies required v1 paths and mobile polling fields stay published
+- `tests/contract/test_forecast_provider_contract.py`: verifies mock and cached FourCastNet providers satisfy the same provider contract
+
 ### FourCastNet NIM
 
 FourCastNet NIM exposes an HTTP API for inference and health checks. The NVIDIA documentation describes `/v1/infer`, `/v1/health/live`, `/v1/health/ready`, and `/v1/metrics`.
