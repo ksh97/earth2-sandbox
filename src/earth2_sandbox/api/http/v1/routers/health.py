@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from earth2_sandbox.config import Settings
+from earth2_sandbox.bootstrap.settings import Settings
 
 
 def create_health_router(*, settings: Settings) -> APIRouter:
