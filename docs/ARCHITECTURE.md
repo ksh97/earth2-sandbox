@@ -58,6 +58,7 @@ Current backend layout:
 - `application/errors.py`: application-level job errors shared by services and adapters
 - `application/ports/forecast_provider.py`: forecast provider port used by job commands
 - `application/ports/forecast_job_store.py`: job store port implemented by storage adapters
+- `application/ports/forecast_job_worker.py`: worker scheduling port used by job recovery
 - `application/commands/*.py`: focused job command use cases such as submit, cancel, retry, cleanup, and run
 - `application/queries/*.py`: focused job query use cases for get, list, and poll
 - `application/services/forecast_job_command_service.py`: thin command use case composition
@@ -73,7 +74,8 @@ Current backend layout:
 - `services/jobs.py`: compatibility facade that delegates to application job services
 - `infrastructure/storage/memory_job_store.py`: process-local job store adapter
 - `infrastructure/storage/file_job_store.py`: JSON-file job store adapter for local diagnostics and restart recovery
-- `workers.py`: forecast job worker port with FastAPI-deferred and startup recovery adapters
+- `infrastructure/queue/asyncio_worker.py`: FastAPI-deferred and asyncio task worker adapters
+- `workers.py`: compatibility exports for worker ports and local adapters
 - `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
 
 ### FourCastNet NIM
