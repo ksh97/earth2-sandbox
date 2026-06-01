@@ -86,12 +86,15 @@ def test_job_priority_ranks_are_queue_ready_without_creating_a_queue() -> None:
     assert priority_rank("high") < priority_rank("normal") < priority_rank("low")
 
 
-def test_job_event_record_defaults_to_current_utc_timestamp() -> None:
-    before = datetime.now(UTC)
-    event = record_forecast_job_event(status="queued", message="Forecast job accepted.")
-    after = datetime.now(UTC)
+def test_job_event_record_uses_supplied_timestamp() -> None:
+    occurred_at = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    event = record_forecast_job_event(
+        status="queued",
+        message="Forecast job accepted.",
+        occurred_at=occurred_at,
+    )
 
-    assert before <= event.occurred_at <= after
+    assert event.occurred_at == occurred_at
     assert event.status == "queued"
     assert event.message == "Forecast job accepted."
 

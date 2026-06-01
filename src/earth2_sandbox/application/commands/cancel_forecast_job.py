@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from earth2_sandbox.application.errors import ForecastJobConflictError, ForecastJobTransitionError
+from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.services.forecast_job_view import append_job_event, with_job_links
 from earth2_sandbox.domain.jobs.status import ACTIVE_JOB_STATUSES, TERMINAL_JOB_STATUSES
@@ -10,15 +9,16 @@ from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics
 
 
 class CancelForecastJob:
-    def __init__(self, *, store: ForecastJobStore) -> None:
+    def __init__(self, *, store: ForecastJobStore, clock: Clock) -> None:
         self.store = store
+        self.clock = clock
 
     async def execute(self, job_id: str) -> ForecastJob:
         job = await self.store.get(job_id)
         if job.status in TERMINAL_JOB_STATUSES:
             raise ForecastJobConflictError(f"Cannot cancel a {job.status} forecast job.")
 
-        now = datetime.now(UTC)
+        now = self.clock.now()
         cancelled = append_job_event(
             job.model_copy(
                 update={

@@ -1,3 +1,4 @@
+from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.bootstrap.settings import Settings
 from earth2_sandbox.infrastructure.nvidia import FourCastNetForecastProvider, FourCastNetNimClient
 from earth2_sandbox.infrastructure.providers import MockForecastProvider
@@ -5,7 +6,11 @@ from earth2_sandbox.providers.base import ForecastProvider
 from earth2_sandbox.storage import FourCastNetResultCache
 
 
-def build_forecast_provider(settings: Settings) -> ForecastProvider:
+def build_forecast_provider(
+    settings: Settings,
+    *,
+    clock: Clock | None = None,
+) -> ForecastProvider:
     if settings.forecast_provider == "mock":
         return MockForecastProvider()
 
@@ -25,7 +30,7 @@ def build_forecast_provider(settings: Settings) -> ForecastProvider:
         poll_interval_seconds=settings.nvcf_poll_interval_seconds,
     )
     result_cache = (
-        FourCastNetResultCache(settings.fourcastnet_cache_dir)
+        FourCastNetResultCache(settings.fourcastnet_cache_dir, clock=clock)
         if settings.fourcastnet_cache_enabled
         else None
     )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
 from earth2_sandbox.domain.jobs.status import ForecastJobStatus
 
@@ -17,10 +17,10 @@ def record_forecast_job_event(
     *,
     status: ForecastJobStatus,
     message: str,
-    occurred_at: datetime | None = None,
+    occurred_at: datetime,
 ) -> ForecastJobEventRecord:
     return ForecastJobEventRecord(
-        occurred_at=occurred_at or datetime.now(UTC),
+        occurred_at=occurred_at,
         status=status,
         message=message,
     )

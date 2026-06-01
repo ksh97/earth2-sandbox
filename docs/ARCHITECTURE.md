@@ -62,6 +62,8 @@ Current backend layout:
 - `application/ports/forecast_job_store.py`: job store port implemented by storage adapters
 - `application/ports/forecast_queue.py`: priority-ready, idempotent queue port for job dispatch
 - `application/ports/forecast_job_worker.py`: worker scheduling port used by job recovery
+- `application/ports/artifact_store.py`: artifact persistence port for cached hosted model outputs
+- `application/ports/clock.py`, `application/ports/id_generator.py`: runtime ports for deterministic time and job identity tests
 - `application/commands/*.py`: focused job command use cases such as submit, cancel, retry, cleanup, and run
 - `application/queries/*.py`: focused job query use cases for get, list, and poll
 - `application/services/forecast_job_command_service.py`: thin command use case composition
@@ -78,6 +80,8 @@ Current backend layout:
 - `infrastructure/nvidia/fourcastnet_decoder.py`: backend-only tar/NumPy decoder and output metadata summarizer
 - `infrastructure/storage/memory_job_store.py`: process-local job store adapter
 - `infrastructure/storage/file_job_store.py`: JSON-file job store adapter for local diagnostics and restart recovery
+- `infrastructure/storage/local_artifact_store.py`: digest-checked local artifact adapter used by the FourCastNet cache
+- `infrastructure/runtime/*.py`: system clock and UUID adapters wired by the bootstrap container
 - `infrastructure/queue/in_memory_priority_queue.py`: process-local priority queue adapter with job id idempotency
 - `infrastructure/queue/asyncio_worker.py`: FastAPI-deferred and asyncio task worker adapters
 - `workers.py`: compatibility exports for worker ports and local adapters

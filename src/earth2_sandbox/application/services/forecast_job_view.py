@@ -34,7 +34,7 @@ def append_job_event(
     *,
     status: ForecastJobStatus,
     message: str,
-    occurred_at: datetime | None = None,
+    occurred_at: datetime,
 ) -> ForecastJob:
     event = record_forecast_job_event(
         status=status,

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Protocol
 
 from earth2_sandbox.application.errors import ForecastJobTransitionError
+from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.ports.forecast_provider import (
     ForecastProvider,
@@ -23,16 +23,23 @@ class DiagnosticForecastProvider(Protocol):
 
 
 class RunForecastJob:
-    def __init__(self, *, provider: ForecastProvider, store: ForecastJobStore) -> None:
+    def __init__(
+        self,
+        *,
+        provider: ForecastProvider,
+        store: ForecastJobStore,
+        clock: Clock,
+    ) -> None:
         self.provider = provider
         self.store = store
+        self.clock = clock
 
     async def execute(self, job_id: str) -> None:
         job = await self.store.get(job_id)
         if job.status != "queued":
             return
 
-        now = datetime.now(UTC)
+        now = self.clock.now()
         running_job = append_job_event(
             job.model_copy(
                 update={
@@ -61,7 +68,7 @@ class RunForecastJob:
         except Exception as error:  # pragma: no cover - defensive boundary
             await self._mark_failed(job_id=job_id, error=f"Unexpected forecast job error: {error}")
         else:
-            completed = datetime.now(UTC)
+            completed = self.clock.now()
             current = await self.store.get(job_id)
             if current.status != "running":
                 return
@@ -112,7 +119,7 @@ class RunForecastJob:
         if job.status != "running":
             return
 
-        failed_at = datetime.now(UTC)
+        failed_at = self.clock.now()
         failed = append_job_event(
             job.model_copy(
                 update={
