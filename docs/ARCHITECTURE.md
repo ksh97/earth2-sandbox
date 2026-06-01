@@ -52,6 +52,9 @@ Current backend layout:
 - `api/http/v1/routers/provider_status.py`: provider status route
 - `api/http/v1/routers/forecast_queries.py`: point/sample forecast and hosted inference routes
 - `api/http/v1/routers/forecast_jobs.py`: forecast job command/query HTTP routes
+- `domain/jobs/status.py`: job lifecycle vocabulary shared by API schemas and services
+- `domain/jobs/events.py`: dependency-free job event record construction
+- `domain/jobs/policies.py`: transition, stale timeout, and cleanup decisions
 - `schemas/forecast.py`: API response models shared by routes and providers
 - `providers/base.py`: forecast provider protocol and provider-level errors
 - `providers/mock.py`: deterministic point forecast provider for app development
@@ -59,7 +62,7 @@ Current backend layout:
 - `providers/factory.py`: environment-driven provider selection
 - `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
 - `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
-- `services/jobs.py`: queued forecast job contract, recovery policy, and store transitions
+- `services/jobs.py`: queued forecast job contract, store adapters, and orchestration that delegates lifecycle rules to the domain job policies
 - `workers.py`: forecast job worker port with FastAPI-deferred and startup recovery adapters
 - `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
 

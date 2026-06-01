@@ -8,6 +8,19 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from earth2_sandbox.domain.jobs.events import record_forecast_job_event
+from earth2_sandbox.domain.jobs.policies import (
+    can_transition_from,
+    should_cleanup_job,
+    should_mark_job_stale,
+)
+from earth2_sandbox.domain.jobs.status import (
+    ACTIVE_JOB_STATUSES,
+    ALL_JOB_STATUSES,
+    TERMINAL_JOB_STATUSES,
+    ForecastJobStatus,
+    ForecastJobTerminalStatus,
+)
 from earth2_sandbox.providers import (
     ForecastProvider,
     ForecastProviderResult,
@@ -20,9 +33,7 @@ from earth2_sandbox.schemas.jobs import (
     ForecastJobEvent,
     ForecastJobListResponse,
     ForecastJobPollResponse,
-    ForecastJobStatus,
     ForecastJobSummary,
-    ForecastJobTerminalStatus,
 )
 from earth2_sandbox.workers import ForecastJobWorker
 
@@ -53,24 +64,6 @@ class ForecastJobTransitionError(ForecastJobConflictError):
             f"Cannot transition forecast job {job_id} from {current_status}; "
             f"expected one of: {expected}."
         )
-
-
-TERMINAL_JOB_STATUSES: set[ForecastJobTerminalStatus] = {
-    "succeeded",
-    "failed",
-    "cancelled",
-}
-ALL_JOB_STATUSES: set[ForecastJobStatus] = {
-    "queued",
-    "running",
-    "succeeded",
-    "failed",
-    "cancelled",
-}
-ACTIVE_JOB_STATUSES: set[ForecastJobStatus] = {
-    "queued",
-    "running",
-}
 
 
 @dataclass(frozen=True)
@@ -208,7 +201,13 @@ class InMemoryForecastJobStore:
             job_ids = [
                 job.id
                 for job in self._jobs.values()
-                if _is_cleanup_candidate(job=job, cutoff=cutoff, statuses=statuses)
+                if should_cleanup_job(
+                    status=job.status,
+                    completed_at=job.completed_at,
+                    updated_at=job.updated_at,
+                    cutoff=cutoff,
+                    statuses=statuses,
+                )
             ]
             for job_id in job_ids:
                 del self._jobs[job_id]
@@ -303,7 +302,13 @@ class FileForecastJobStore:
                 except ValueError:
                     continue
 
-                if not _is_cleanup_candidate(job=job, cutoff=cutoff, statuses=statuses):
+                if not should_cleanup_job(
+                    status=job.status,
+                    completed_at=job.completed_at,
+                    updated_at=job.updated_at,
+                    cutoff=cutoff,
+                    statuses=statuses,
+                ):
                     continue
 
                 path.unlink()
@@ -456,7 +461,11 @@ class ForecastJobService:
         skipped_count = 0
 
         for job in active_jobs:
-            if _is_stale_job(job=job, now=now, timeout_seconds=timeout):
+            if should_mark_job_stale(
+                updated_at=job.updated_at,
+                now=now,
+                timeout_seconds=timeout,
+            ):
                 if await self._mark_timed_out(job=job, occurred_at=now, timeout_seconds=timeout):
                     timed_out_count += 1
                 else:
@@ -662,14 +671,19 @@ class ForecastJobService:
         message: str,
         occurred_at: datetime | None = None,
     ) -> ForecastJob:
+        event = record_forecast_job_event(
+            status=status,
+            message=message,
+            occurred_at=occurred_at,
+        )
         return job.model_copy(
             update={
                 "events": [
                     *job.events,
                     ForecastJobEvent(
-                        occurred_at=occurred_at or datetime.now(UTC),
-                        status=status,
-                        message=message,
+                        occurred_at=event.occurred_at,
+                        status=event.status,
+                        message=event.message,
                     ),
                 ]
             }
@@ -739,21 +753,15 @@ def _ensure_transition_allowed(
     current: ForecastJob,
     expected_statuses: Collection[ForecastJobStatus],
 ) -> None:
-    if current.status not in expected_statuses:
+    if not can_transition_from(
+        current_status=current.status,
+        expected_statuses=expected_statuses,
+    ):
         raise ForecastJobTransitionError(
             job_id=current.id,
             current_status=current.status,
             expected_statuses=expected_statuses,
         )
-
-
-def _is_stale_job(
-    *,
-    job: ForecastJob,
-    now: datetime,
-    timeout_seconds: int,
-) -> bool:
-    return job.updated_at <= now - timedelta(seconds=timeout_seconds)
 
 
 def _build_new_job(
@@ -783,15 +791,3 @@ def _build_new_job(
             )
         ],
     )
-
-
-def _is_cleanup_candidate(
-    *,
-    job: ForecastJob,
-    cutoff: datetime,
-    statuses: set[ForecastJobTerminalStatus],
-) -> bool:
-    if job.status not in statuses:
-        return False
-    reference_time = job.completed_at or job.updated_at
-    return reference_time < cutoff
