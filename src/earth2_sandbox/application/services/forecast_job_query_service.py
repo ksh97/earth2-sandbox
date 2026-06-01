@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
-from earth2_sandbox.application.services.forecast_job_view import (
-    to_job_poll_response,
-    to_job_summary,
-    with_job_links,
-)
+from earth2_sandbox.application.queries import GetForecastJob, ListForecastJobs, PollForecastJob
 from earth2_sandbox.domain.jobs.status import ForecastJobStatus
 from earth2_sandbox.schemas.jobs import (
     ForecastJob,
@@ -16,10 +12,12 @@ from earth2_sandbox.schemas.jobs import (
 
 class ForecastJobQueryService:
     def __init__(self, *, store: ForecastJobStore) -> None:
-        self.store = store
+        self.get_forecast_job = GetForecastJob(store=store)
+        self.list_forecast_jobs = ListForecastJobs(store=store)
+        self.poll_forecast_job = PollForecastJob(store=store)
 
     async def get_job(self, job_id: str) -> ForecastJob:
-        return with_job_links(await self.store.get(job_id))
+        return await self.get_forecast_job.execute(job_id)
 
     async def list_recent_jobs(
         self,
@@ -27,9 +25,7 @@ class ForecastJobQueryService:
         limit: int,
         status: ForecastJobStatus | None = None,
     ) -> ForecastJobListResponse:
-        jobs = await self.store.list_recent(limit=limit, status=status)
-        summaries = [to_job_summary(with_job_links(job)) for job in jobs]
-        return ForecastJobListResponse(count=len(summaries), jobs=summaries)
+        return await self.list_forecast_jobs.execute(limit=limit, status=status)
 
     async def poll_job(self, job_id: str) -> ForecastJobPollResponse:
-        return to_job_poll_response(with_job_links(await self.store.get(job_id)))
+        return await self.poll_forecast_job.execute(job_id)

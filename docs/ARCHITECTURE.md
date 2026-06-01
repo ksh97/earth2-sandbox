@@ -58,8 +58,10 @@ Current backend layout:
 - `application/errors.py`: application-level job errors shared by services and adapters
 - `application/ports/forecast_provider.py`: forecast provider port used by job commands
 - `application/ports/forecast_job_store.py`: job store port implemented by storage adapters
-- `application/services/forecast_job_command_service.py`: job commands such as create, cancel, retry, cleanup, and run
-- `application/services/forecast_job_query_service.py`: job read models for get, list, and poll
+- `application/commands/*.py`: focused job command use cases such as submit, cancel, retry, cleanup, and run
+- `application/queries/*.py`: focused job query use cases for get, list, and poll
+- `application/services/forecast_job_command_service.py`: thin command use case composition
+- `application/services/forecast_job_query_service.py`: thin query use case composition
 - `application/services/forecast_job_recovery_service.py`: startup recovery and stale active job timeout orchestration
 - `schemas/forecast.py`: API response models shared by routes and providers
 - `providers/base.py`: forecast provider protocol and provider-level errors
