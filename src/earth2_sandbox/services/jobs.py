@@ -6,6 +6,7 @@ from earth2_sandbox.application.errors import (
     ForecastJobTransitionError,
 )
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
+from earth2_sandbox.application.ports.forecast_job_worker import ForecastJobWorker
 from earth2_sandbox.application.ports.forecast_provider import ForecastProvider
 from earth2_sandbox.application.services import (
     ForecastJobCommandService,
@@ -24,7 +25,6 @@ from earth2_sandbox.schemas.jobs import (
     ForecastJobListResponse,
     ForecastJobPollResponse,
 )
-from earth2_sandbox.workers import ForecastJobWorker
 
 __all__ = [
     "FileForecastJobStore",

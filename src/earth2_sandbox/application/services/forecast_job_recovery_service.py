@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 
 from earth2_sandbox.application.errors import ForecastJobTransitionError
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
+from earth2_sandbox.application.ports.forecast_job_worker import ForecastJobWorker
 from earth2_sandbox.application.services.forecast_job_view import append_job_event
 from earth2_sandbox.domain.jobs.policies import should_mark_job_stale
 from earth2_sandbox.domain.jobs.status import ACTIVE_JOB_STATUSES
 from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics
-from earth2_sandbox.workers import ForecastJobWorker
 
 
 @dataclass(frozen=True)

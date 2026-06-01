@@ -9,9 +9,9 @@ from earth2_sandbox.api.http.v1.routers.health import create_health_router
 from earth2_sandbox.api.http.v1.routers.provider_status import create_provider_status_router
 from earth2_sandbox.bootstrap.container import ApplicationContainer, build_container
 from earth2_sandbox.bootstrap.settings import Settings
+from earth2_sandbox.infrastructure.queue import AsyncioTaskForecastJobWorker
 from earth2_sandbox.providers import ForecastProvider
 from earth2_sandbox.services.jobs import ForecastJobService
-from earth2_sandbox.workers import AsyncioTaskForecastJobWorker
 
 LOCAL_DEV_ORIGINS = [
     "http://localhost:8081",
