@@ -12,13 +12,25 @@ from earth2_sandbox.application.services import (
 from earth2_sandbox.infrastructure.storage import FileForecastJobStore, InMemoryForecastJobStore
 from earth2_sandbox.providers import MockForecastProvider
 
+NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+
+class FixedClock:
+    def __init__(self, now: datetime = NOW) -> None:
+        self._now = now
+
+    def now(self) -> datetime:
+        return self._now
+
 
 def test_forecast_job_command_and_query_services_share_store() -> None:
     async def scenario():
-        store = InMemoryForecastJobStore()
+        clock = FixedClock()
+        store = InMemoryForecastJobStore(clock=clock)
         command_service = ForecastJobCommandService(
             provider=MockForecastProvider(),
             store=store,
+            clock=clock,
         )
         query_service = ForecastJobQueryService(store=store)
 
@@ -42,10 +54,12 @@ def test_forecast_job_command_and_query_services_share_store() -> None:
 
 def test_forecast_job_command_service_rejects_retry_for_active_job() -> None:
     async def scenario() -> None:
-        store = InMemoryForecastJobStore()
+        clock = FixedClock()
+        store = InMemoryForecastJobStore(clock=clock)
         command_service = ForecastJobCommandService(
             provider=MockForecastProvider(),
             store=store,
+            clock=clock,
         )
         job = await command_service.create_job(latitude=37.5665, longitude=126.9780)
         with pytest.raises(ForecastJobConflictError):
@@ -63,9 +77,11 @@ def test_forecast_job_recovery_service_requeues_running_jobs() -> None:
             self.job_ids.append(job_id)
 
     async def scenario():
-        store = InMemoryForecastJobStore()
+        clock = FixedClock()
+        store = InMemoryForecastJobStore(clock=clock)
         recovery_service = ForecastJobRecoveryService(
             store=store,
+            clock=clock,
             default_stale_timeout_seconds=3600,
         )
         running = await store.create(latitude=37.5665, longitude=126.9780)
@@ -100,13 +116,15 @@ def test_forecast_job_recovery_service_times_out_stale_jobs(tmp_path) -> None:
             self.job_ids.append(job_id)
 
     async def scenario():
-        store = FileForecastJobStore(tmp_path)
+        clock = FixedClock()
+        store = FileForecastJobStore(tmp_path, clock=clock)
         recovery_service = ForecastJobRecoveryService(
             store=store,
+            clock=clock,
             default_stale_timeout_seconds=60,
         )
         job = await store.create(latitude=37.5665, longitude=126.9780)
-        old_time = datetime.now(UTC) - timedelta(minutes=10)
+        old_time = NOW - timedelta(minutes=10)
         stale_running = job.model_copy(
             update={
                 "status": "running",

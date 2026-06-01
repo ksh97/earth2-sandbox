@@ -8,6 +8,7 @@ from earth2_sandbox.application.commands import (
     RunForecastJob,
     SubmitForecastJob,
 )
+from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.ports.forecast_provider import ForecastProvider
 from earth2_sandbox.domain.jobs.status import ForecastJobTerminalStatus
@@ -25,16 +26,19 @@ class ForecastJobCommandService:
         *,
         provider: ForecastProvider,
         store: ForecastJobStore,
+        clock: Clock,
         default_retention_hours: int = 168,
     ) -> None:
+        self.clock = clock
         self.submit_forecast_job = SubmitForecastJob(store=store)
-        self.cancel_forecast_job = CancelForecastJob(store=store)
+        self.cancel_forecast_job = CancelForecastJob(store=store, clock=clock)
         self.retry_forecast_job = RetryForecastJob(store=store)
         self.cleanup_forecast_jobs = CleanupForecastJobs(
             store=store,
+            clock=clock,
             default_retention_hours=default_retention_hours,
         )
-        self.run_forecast_job = RunForecastJob(provider=provider, store=store)
+        self.run_forecast_job = RunForecastJob(provider=provider, store=store, clock=clock)
 
     async def create_job(self, *, latitude: float, longitude: float) -> ForecastJob:
         return await self.submit_forecast_job.execute(latitude=latitude, longitude=longitude)

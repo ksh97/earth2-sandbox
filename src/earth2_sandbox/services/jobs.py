@@ -5,6 +5,7 @@ from earth2_sandbox.application.errors import (
     ForecastJobNotFoundError,
     ForecastJobTransitionError,
 )
+from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.ports.forecast_job_worker import ForecastJobWorker
 from earth2_sandbox.application.ports.forecast_provider import ForecastProvider
@@ -15,6 +16,7 @@ from earth2_sandbox.application.services import (
     ForecastJobRecoveryService,
 )
 from earth2_sandbox.domain.jobs.status import ForecastJobStatus, ForecastJobTerminalStatus
+from earth2_sandbox.infrastructure.runtime import SystemClock
 from earth2_sandbox.infrastructure.storage import (
     FileForecastJobStore,
     InMemoryForecastJobStore,
@@ -46,21 +48,25 @@ class ForecastJobService:
         *,
         provider: ForecastProvider,
         store: ForecastJobStore | None = None,
+        clock: Clock | None = None,
         default_retention_hours: int = 168,
         default_stale_timeout_seconds: int = 1800,
     ) -> None:
         self.provider = provider
-        self.store = store or InMemoryForecastJobStore()
+        self.clock = clock or SystemClock()
+        self.store = store or InMemoryForecastJobStore(clock=self.clock)
         self.default_retention_hours = default_retention_hours
         self.default_stale_timeout_seconds = default_stale_timeout_seconds
         self.command_service = ForecastJobCommandService(
             provider=self.provider,
             store=self.store,
+            clock=self.clock,
             default_retention_hours=self.default_retention_hours,
         )
         self.query_service = ForecastJobQueryService(store=self.store)
         self.recovery_service = ForecastJobRecoveryService(
             store=self.store,
+            clock=self.clock,
             default_stale_timeout_seconds=self.default_stale_timeout_seconds,
         )
 

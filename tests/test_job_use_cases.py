@@ -15,6 +15,16 @@ from earth2_sandbox.application.queries import GetForecastJob, ListForecastJobs,
 from earth2_sandbox.infrastructure.storage import FileForecastJobStore, InMemoryForecastJobStore
 from earth2_sandbox.providers import MockForecastProvider
 
+NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+
+class FixedClock:
+    def __init__(self, now: datetime = NOW) -> None:
+        self._now = now
+
+    def now(self) -> datetime:
+        return self._now
+
 
 def test_submit_list_get_and_poll_forecast_job_use_cases() -> None:
     async def scenario():
@@ -43,9 +53,10 @@ def test_submit_list_get_and_poll_forecast_job_use_cases() -> None:
 
 def test_cancel_and_retry_forecast_job_use_cases() -> None:
     async def scenario():
-        store = InMemoryForecastJobStore()
+        clock = FixedClock()
+        store = InMemoryForecastJobStore(clock=clock)
         submit = SubmitForecastJob(store=store)
-        cancel = CancelForecastJob(store=store)
+        cancel = CancelForecastJob(store=store, clock=clock)
         retry = RetryForecastJob(store=store)
 
         queued = await submit.execute(latitude=37.5665, longitude=126.9780)
@@ -67,9 +78,10 @@ def test_cancel_and_retry_forecast_job_use_cases() -> None:
 
 def test_run_forecast_job_use_case_records_success() -> None:
     async def scenario():
-        store = InMemoryForecastJobStore()
+        clock = FixedClock()
+        store = InMemoryForecastJobStore(clock=clock)
         submit = SubmitForecastJob(store=store)
-        run = RunForecastJob(provider=MockForecastProvider(), store=store)
+        run = RunForecastJob(provider=MockForecastProvider(), store=store, clock=clock)
 
         queued = await submit.execute(latitude=37.5665, longitude=126.9780)
         await run.execute(queued.id)
@@ -84,12 +96,17 @@ def test_run_forecast_job_use_case_records_success() -> None:
 
 def test_cleanup_forecast_jobs_use_case_deletes_old_terminal_jobs(tmp_path) -> None:
     async def scenario():
-        store = FileForecastJobStore(tmp_path)
-        cleanup = CleanupForecastJobs(store=store, default_retention_hours=168)
+        clock = FixedClock()
+        store = FileForecastJobStore(tmp_path, clock=clock)
+        cleanup = CleanupForecastJobs(
+            store=store,
+            clock=clock,
+            default_retention_hours=168,
+        )
         old_job = await store.create(latitude=37.5665, longitude=126.9780)
         fresh_job = await store.create(latitude=35.6762, longitude=139.6503)
 
-        old_time = datetime.now(UTC) - timedelta(hours=200)
+        old_time = NOW - timedelta(hours=200)
         old_terminal = old_job.model_copy(
             update={
                 "status": "succeeded",

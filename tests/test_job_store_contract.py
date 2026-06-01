@@ -8,6 +8,19 @@ from earth2_sandbox.application.errors import ForecastJobNotFoundError, Forecast
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.infrastructure.storage import FileForecastJobStore, InMemoryForecastJobStore
 
+FIXED_NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+FIXED_JOB_ID = "00000000-0000-4000-8000-000000000001"
+
+
+class FixedClock:
+    def now(self) -> datetime:
+        return FIXED_NOW
+
+
+class FixedIdGenerator:
+    def new_id(self) -> str:
+        return FIXED_JOB_ID
+
 
 @pytest.mark.parametrize(
     "store_factory",
@@ -53,5 +66,39 @@ def test_forecast_job_store_contract_create_update_list_and_cleanup(
         assert deleted_count == 1
         with pytest.raises(ForecastJobNotFoundError):
             await store.get(first.id)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "store_factory",
+    [
+        lambda path, clock, id_generator: InMemoryForecastJobStore(
+            clock=clock,
+            id_generator=id_generator,
+        ),
+        lambda path, clock, id_generator: FileForecastJobStore(
+            path,
+            clock=clock,
+            id_generator=id_generator,
+        ),
+    ],
+)
+def test_forecast_job_store_uses_clock_and_id_generator_ports(
+    tmp_path,
+    store_factory: Callable[..., ForecastJobStore],
+) -> None:
+    async def scenario() -> None:
+        store = store_factory(tmp_path, FixedClock(), FixedIdGenerator())
+        job = await store.create(latitude=37.5665, longitude=126.9780)
+        running = await store.update_if_status(
+            job.model_copy(update={"status": "running"}),
+            expected_statuses={"queued"},
+        )
+
+        assert job.id == FIXED_JOB_ID
+        assert job.created_at == FIXED_NOW
+        assert job.updated_at == FIXED_NOW
+        assert running.updated_at == FIXED_NOW
 
     asyncio.run(scenario())

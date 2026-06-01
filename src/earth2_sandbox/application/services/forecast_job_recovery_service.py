@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
 from earth2_sandbox.application.errors import ForecastJobTransitionError
+from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.ports.forecast_job_worker import ForecastJobWorker
 from earth2_sandbox.application.services.forecast_job_view import append_job_event
@@ -25,9 +26,11 @@ class ForecastJobRecoveryService:
         self,
         *,
         store: ForecastJobStore,
+        clock: Clock,
         default_stale_timeout_seconds: int = 1800,
     ) -> None:
         self.store = store
+        self.clock = clock
         self.default_stale_timeout_seconds = default_stale_timeout_seconds
 
     async def recover_interrupted_jobs(
@@ -37,7 +40,7 @@ class ForecastJobRecoveryService:
         stale_timeout_seconds: int | None = None,
     ) -> ForecastJobRecoveryReport:
         timeout = stale_timeout_seconds or self.default_stale_timeout_seconds
-        now = datetime.now(UTC)
+        now = self.clock.now()
         active_jobs = await self.store.list_active()
         requeued_count = 0
         timed_out_count = 0

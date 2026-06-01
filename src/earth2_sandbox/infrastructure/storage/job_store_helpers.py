@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Collection
-from datetime import UTC, datetime
-from uuid import uuid4
 
 from earth2_sandbox.application.errors import ForecastJobNotFoundError, ForecastJobTransitionError
+from earth2_sandbox.application.ports.clock import Clock
+from earth2_sandbox.application.ports.id_generator import IdGenerator
 from earth2_sandbox.domain.jobs.entities import (
     ForecastJobAttempt,
     ForecastJobCoordinates,
@@ -22,6 +22,8 @@ def build_new_job(
     longitude: float,
     parent_job_id: str | None,
     attempt: int,
+    clock: Clock,
+    id_generator: IdGenerator,
 ) -> ForecastJob:
     coordinates = ForecastJobCoordinates(latitude=latitude, longitude=longitude)
     parent_identity = (
@@ -31,10 +33,11 @@ def build_new_job(
         value=attempt,
         parent_job_id=parent_identity,
     )
-    now = datetime.now(UTC)
+    now = clock.now()
+    job_identity = ForecastJobIdentity.parse(id_generator.new_id())
     message = "Forecast retry accepted." if parent_job_id else "Forecast job accepted."
     return ForecastJob(
-        id=str(uuid4()),
+        id=job_identity.value,
         status="queued",
         latitude=coordinates.latitude,
         longitude=coordinates.longitude,
@@ -60,9 +63,9 @@ def normalize_job_id(job_id: str) -> str:
         raise ForecastJobNotFoundError(job_id) from error
 
 
-def prepare_job_for_update(job: ForecastJob) -> ForecastJob:
+def prepare_job_for_update(job: ForecastJob, *, clock: Clock) -> ForecastJob:
     normalized_job_id = normalize_job_id(job.id)
-    return job.model_copy(update={"id": normalized_job_id, "updated_at": datetime.now(UTC)})
+    return job.model_copy(update={"id": normalized_job_id, "updated_at": clock.now()})
 
 
 def ensure_transition_allowed(

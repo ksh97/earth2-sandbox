@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from earth2_sandbox.application.errors import ForecastJobNotFoundError
+from earth2_sandbox.application.ports.clock import Clock
+from earth2_sandbox.application.ports.id_generator import IdGenerator
 from earth2_sandbox.domain.jobs.policies import should_cleanup_job
 from earth2_sandbox.domain.jobs.status import (
     ACTIVE_JOB_STATUSES,
@@ -13,6 +15,7 @@ from earth2_sandbox.domain.jobs.status import (
     ForecastJobStatus,
     ForecastJobTerminalStatus,
 )
+from earth2_sandbox.infrastructure.runtime import SystemClock, UuidIdGenerator
 from earth2_sandbox.infrastructure.storage.job_store_helpers import (
     build_new_job,
     ensure_transition_allowed,
@@ -32,9 +35,17 @@ class FileForecastJobStore:
     or a database before the job contract settles.
     """
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(
+        self,
+        root: str | Path,
+        *,
+        clock: Clock | None = None,
+        id_generator: IdGenerator | None = None,
+    ) -> None:
         self.root = Path(root)
         self._lock = asyncio.Lock()
+        self._clock = clock or SystemClock()
+        self._id_generator = id_generator or UuidIdGenerator()
 
     async def create(
         self,
@@ -49,6 +60,8 @@ class FileForecastJobStore:
             longitude=longitude,
             parent_job_id=parent_job_id,
             attempt=attempt,
+            clock=self._clock,
+            id_generator=self._id_generator,
         )
         async with self._lock:
             self._write(job)
@@ -70,7 +83,7 @@ class FileForecastJobStore:
         *,
         expected_statuses: Collection[ForecastJobStatus],
     ) -> ForecastJob:
-        next_job = prepare_job_for_update(job)
+        next_job = prepare_job_for_update(job, clock=self._clock)
         async with self._lock:
             path = self._path(next_job.id)
             if not path.exists():

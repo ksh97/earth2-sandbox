@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
+from earth2_sandbox.application.ports.artifact_store import ArtifactRecord, ArtifactStore
+from earth2_sandbox.application.ports.clock import Clock
+from earth2_sandbox.infrastructure.storage.local_artifact_store import LocalArtifactStore
 from earth2_sandbox.schemas.fourcastnet import FourCastNetHostedInferenceResult
 
 
@@ -27,8 +29,19 @@ class FourCastNetResultCache:
     content type. API keys, headers, and presigned download URLs are never stored.
     """
 
-    def __init__(self, root: str | Path):
+    def __init__(
+        self,
+        root: str | Path,
+        *,
+        clock: Clock | None = None,
+        artifact_store: ArtifactStore | None = None,
+    ):
         self.root = Path(root)
+        self.artifact_store = artifact_store or LocalArtifactStore(
+            self.root,
+            clock=clock,
+            content_suffix=".tar",
+        )
 
     def load(
         self,
@@ -37,29 +50,12 @@ class FourCastNetResultCache:
         accept: str,
     ) -> tuple[bytes, FourCastNetCacheRecord] | None:
         key = self._key(request_payload=request_payload, accept=accept)
-        tar_path = self.root / f"{key}.tar"
-        metadata_path = self.root / f"{key}.json"
-        if not tar_path.exists() or not metadata_path.exists():
+        loaded = self.artifact_store.load(key=key)
+        if loaded is None:
             return None
 
-        content = tar_path.read_bytes()
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        digest = sha256(content).hexdigest()
-        if metadata.get("sha256") != digest:
-            return None
-
-        return (
-            content,
-            FourCastNetCacheRecord(
-                key=key,
-                path=tar_path,
-                metadata_path=metadata_path,
-                byte_length=len(content),
-                sha256=digest,
-                content_type=str(metadata.get("content_type") or "application/x-tar"),
-                created_at=str(metadata.get("created_at") or ""),
-            ),
-        )
+        content, record = loaded
+        return (content, self._cache_record_from_artifact(record))
 
     def save(
         self,
@@ -71,44 +67,42 @@ class FourCastNetResultCache:
         if result.raw_content is None or "tar" not in result.content_type.lower():
             return None
 
-        self.root.mkdir(parents=True, exist_ok=True)
         key = self._key(request_payload=request_payload, accept=accept)
-        tar_path = self.root / f"{key}.tar"
-        metadata_path = self.root / f"{key}.json"
-        content = result.raw_content
-        digest = sha256(content).hexdigest()
-        created_at = datetime.now(UTC).isoformat()
-
-        tar_path.write_bytes(content)
-        metadata_path.write_text(
-            json.dumps(
-                {
-                    "key": key,
-                    "created_at": created_at,
-                    "content_type": result.content_type,
-                    "byte_length": len(content),
-                    "sha256": digest,
-                    "request_payload": request_payload,
-                    "source": result.response_source,
-                    "nvcf_request_id": result.nvcf_request_id,
-                    "nvcf_status": result.nvcf_status,
-                },
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            ),
-            encoding="utf-8",
-        )
-
-        return FourCastNetCacheRecord(
+        record = self.artifact_store.save(
             key=key,
-            path=tar_path,
-            metadata_path=metadata_path,
-            byte_length=len(content),
-            sha256=digest,
+            content=result.raw_content,
             content_type=result.content_type,
-            created_at=created_at,
+            metadata={
+                "request_payload": request_payload,
+                "source": result.response_source,
+                "nvcf_request_id": result.nvcf_request_id,
+                "nvcf_status": result.nvcf_status,
+            },
         )
+        return self._cache_record_from_artifact(record)
+
+    def _cache_record_from_artifact(self, record: ArtifactRecord) -> FourCastNetCacheRecord:
+        return FourCastNetCacheRecord(
+            key=record.key,
+            path=self._content_path(record.key),
+            metadata_path=self._metadata_path(record.key),
+            byte_length=record.byte_length,
+            sha256=record.sha256,
+            content_type=record.content_type,
+            created_at=record.created_at,
+        )
+
+    def _content_path(self, key: str) -> Path:
+        content_path = getattr(self.artifact_store, "content_path", None)
+        if callable(content_path):
+            return Path(content_path(key))
+        return self.root / f"{key}.tar"
+
+    def _metadata_path(self, key: str) -> Path:
+        metadata_path = getattr(self.artifact_store, "metadata_path", None)
+        if callable(metadata_path):
+            return Path(metadata_path(key))
+        return self.root / f"{key}.json"
 
     def _key(self, *, request_payload: dict[str, int | float | str], accept: str) -> str:
         key_payload = {
