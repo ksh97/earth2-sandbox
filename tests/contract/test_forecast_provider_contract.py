@@ -3,8 +3,8 @@ import asyncio
 import httpx
 
 from earth2_sandbox.application.ports.forecast_provider import ForecastProvider
-from earth2_sandbox.clients.nim import FourCastNetNimClient
-from earth2_sandbox.providers import FourCastNetForecastProvider, MockForecastProvider
+from earth2_sandbox.infrastructure.nvidia import FourCastNetForecastProvider, FourCastNetNimClient
+from earth2_sandbox.infrastructure.providers import MockForecastProvider
 from earth2_sandbox.schemas.forecast import ForecastSummary
 from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,

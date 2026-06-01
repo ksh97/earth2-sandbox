@@ -1,4 +1,4 @@
-"""Compatibility exports for the mock forecast provider adapter."""
+"""Provider infrastructure adapters."""
 
 from earth2_sandbox.infrastructure.providers.mock_forecast_provider import (
     MockForecastProvider,

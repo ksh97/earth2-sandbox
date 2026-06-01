@@ -4,7 +4,7 @@ from io import BytesIO
 
 import numpy as np
 
-from earth2_sandbox.postprocessing import FourCastNetPostProcessor
+from earth2_sandbox.infrastructure.nvidia import FourCastNetPostProcessor
 from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,
     FourCastNetHostedInferenceResult,

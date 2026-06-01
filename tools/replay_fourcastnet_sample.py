@@ -5,7 +5,10 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from earth2_sandbox.postprocessing import FOURCASTNET_POINT_VARIABLES, FourCastNetPostProcessor
+from earth2_sandbox.infrastructure.nvidia import (
+    FOURCASTNET_POINT_VARIABLES,
+    FourCastNetPostProcessor,
+)
 from earth2_sandbox.schemas.fourcastnet import FourCastNetHostedInferenceRequest
 
 SEOUL_LATITUDE = 37.5665
