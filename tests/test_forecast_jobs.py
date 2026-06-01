@@ -8,8 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
-from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
+from earth2_sandbox.infrastructure.nvidia import FourCastNetNimClient
 from earth2_sandbox.providers import FourCastNetForecastProvider, MockForecastProvider
 from earth2_sandbox.schemas.jobs import ForecastJobDiagnostics, ForecastJobEvent
 from earth2_sandbox.services import (

@@ -7,8 +7,8 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
-from earth2_sandbox.clients.nim import FourCastNetNimClient
 from earth2_sandbox.config import Settings
+from earth2_sandbox.infrastructure.nvidia import FourCastNetNimClient
 from earth2_sandbox.providers import FourCastNetForecastProvider, build_forecast_provider
 from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,

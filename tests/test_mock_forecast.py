@@ -1,6 +1,6 @@
 import asyncio
 
-from earth2_sandbox.providers.mock import MockForecastProvider
+from earth2_sandbox.infrastructure.providers import MockForecastProvider
 
 
 def test_mock_forecast_returns_mobile_friendly_summary() -> None:

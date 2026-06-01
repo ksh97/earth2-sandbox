@@ -68,13 +68,14 @@ Current backend layout:
 - `application/services/forecast_job_query_service.py`: thin query use case composition
 - `application/services/forecast_job_recovery_service.py`: startup recovery and stale active job timeout orchestration
 - `schemas/forecast.py`: API response models shared by routes and providers
-- `providers/base.py`: forecast provider protocol and provider-level errors
-- `providers/mock.py`: deterministic point forecast provider for app development
-- `providers/fourcastnet.py`: FourCastNet readiness boundary for future inference
-- `providers/factory.py`: environment-driven provider selection
-- `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
-- `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
+- `providers/base.py`: compatibility export for the forecast provider port
+- `providers/factory.py`: environment-driven provider adapter selection
+- `providers/*.py`, `clients/*.py`, `postprocessing/*.py`: compatibility exports for older imports
 - `services/jobs.py`: compatibility facade that delegates to application job services
+- `infrastructure/providers/mock_forecast_provider.py`: deterministic point forecast provider for app development
+- `infrastructure/nvidia/nim_client.py`: low-level self-hosted/hosted FourCastNet client helpers
+- `infrastructure/nvidia/fourcastnet_provider.py`: FourCastNet readiness and hosted inference provider adapter
+- `infrastructure/nvidia/fourcastnet_decoder.py`: backend-only tar/NumPy decoder and output metadata summarizer
 - `infrastructure/storage/memory_job_store.py`: process-local job store adapter
 - `infrastructure/storage/file_job_store.py`: JSON-file job store adapter for local diagnostics and restart recovery
 - `infrastructure/queue/in_memory_priority_queue.py`: process-local priority queue adapter with job id idempotency

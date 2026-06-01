@@ -1,4 +1,4 @@
-from earth2_sandbox.postprocessing.fourcastnet import (
+from earth2_sandbox.infrastructure.nvidia.fourcastnet_decoder import (
     FOURCASTNET_POINT_VARIABLES,
     FourCastNetPostProcessingError,
     FourCastNetPostProcessor,
