@@ -44,7 +44,10 @@ Responsibilities:
 
 Current backend layout:
 
-- `app.py`: FastAPI app assembly, CORS, provider/store wiring, and startup recovery
+- `app.py`: compatibility export for FastAPI app construction
+- `bootstrap/settings.py`: Pydantic settings with the existing `EARTH2_` environment contract
+- `bootstrap/container.py`: runtime dependency container for provider, job store, and services
+- `bootstrap/app_factory.py`: FastAPI app assembly, CORS, router registration, and startup recovery
 - `api/http/v1/routers/health.py`: root and health routes
 - `api/http/v1/routers/provider_status.py`: provider status route
 - `api/http/v1/routers/forecast_queries.py`: point/sample forecast and hosted inference routes

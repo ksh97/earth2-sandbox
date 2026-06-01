@@ -1,5 +1,5 @@
+from earth2_sandbox.bootstrap.settings import Settings
 from earth2_sandbox.clients.nim import FourCastNetNimClient
-from earth2_sandbox.config import Settings
 from earth2_sandbox.providers.base import ForecastProvider
 from earth2_sandbox.providers.fourcastnet import FourCastNetForecastProvider
 from earth2_sandbox.providers.mock import MockForecastProvider
