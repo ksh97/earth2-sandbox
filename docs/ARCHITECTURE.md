@@ -60,6 +60,7 @@ Current backend layout:
 - `application/errors.py`: application-level job errors shared by services and adapters
 - `application/ports/forecast_provider.py`: forecast provider port used by job commands
 - `application/ports/forecast_job_store.py`: job store port implemented by storage adapters
+- `application/ports/forecast_queue.py`: priority-ready, idempotent queue port for job dispatch
 - `application/ports/forecast_job_worker.py`: worker scheduling port used by job recovery
 - `application/commands/*.py`: focused job command use cases such as submit, cancel, retry, cleanup, and run
 - `application/queries/*.py`: focused job query use cases for get, list, and poll
@@ -76,6 +77,7 @@ Current backend layout:
 - `services/jobs.py`: compatibility facade that delegates to application job services
 - `infrastructure/storage/memory_job_store.py`: process-local job store adapter
 - `infrastructure/storage/file_job_store.py`: JSON-file job store adapter for local diagnostics and restart recovery
+- `infrastructure/queue/in_memory_priority_queue.py`: process-local priority queue adapter with job id idempotency
 - `infrastructure/queue/asyncio_worker.py`: FastAPI-deferred and asyncio task worker adapters
 - `workers.py`: compatibility exports for worker ports and local adapters
 - `storage/fourcastnet.py`: filesystem cache for hosted tar outputs, keyed by sanitized request payload
@@ -182,6 +184,11 @@ The job store is configurable:
 The file-backed store is not a distributed queue, but it keeps hosted-call diagnostics
 across backend restarts and creates a simple migration path toward Redis, a database,
 or a worker service.
+
+Job dispatch now goes through a `ForecastQueue` application port. The first adapter is an
+in-memory priority queue with idempotency keyed by job id. It is not a durable distributed
+queue, but it gives HTTP handlers, startup recovery, and future worker services the same
+enqueue/dequeue/complete/fail contract before Redis or a dedicated queue service is introduced.
 
 When the backend starts, the service scans active job files. Existing `queued` jobs
 are scheduled again, and interrupted `running` jobs are moved back to `queued` before

@@ -9,7 +9,7 @@ from earth2_sandbox.api.http.v1.routers.health import create_health_router
 from earth2_sandbox.api.http.v1.routers.provider_status import create_provider_status_router
 from earth2_sandbox.bootstrap.container import ApplicationContainer, build_container
 from earth2_sandbox.bootstrap.settings import Settings
-from earth2_sandbox.infrastructure.queue import AsyncioTaskForecastJobWorker
+from earth2_sandbox.infrastructure.queue import QueuedAsyncioTaskForecastJobWorker
 from earth2_sandbox.providers import ForecastProvider
 from earth2_sandbox.services.jobs import ForecastJobService
 
@@ -37,8 +37,9 @@ def create_app(
 def create_app_from_container(container: ApplicationContainer) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        worker = AsyncioTaskForecastJobWorker(
+        worker = QueuedAsyncioTaskForecastJobWorker(
             run_job=container.forecast_job_service.run_job,
+            queue=container.forecast_queue,
             tasks=container.recovered_job_tasks,
         )
         await container.forecast_job_service.recover_interrupted_jobs(worker=worker)
@@ -63,7 +64,10 @@ def create_app_from_container(container: ApplicationContainer) -> FastAPI:
     )
     app.include_router(create_forecast_queries_router(forecast_provider=container.forecast_provider))
     app.include_router(
-        create_forecast_jobs_router(forecast_job_service=container.forecast_job_service)
+        create_forecast_jobs_router(
+            forecast_job_service=container.forecast_job_service,
+            forecast_queue=container.forecast_queue,
+        )
     )
 
     return app
