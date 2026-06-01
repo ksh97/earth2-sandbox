@@ -56,7 +56,11 @@ Current backend layout:
 - `domain/jobs/events.py`: dependency-free job event record construction
 - `domain/jobs/policies.py`: transition, stale timeout, and cleanup decisions
 - `application/errors.py`: application-level job errors shared by services and adapters
+- `application/ports/forecast_provider.py`: forecast provider port used by job commands
 - `application/ports/forecast_job_store.py`: job store port implemented by storage adapters
+- `application/services/forecast_job_command_service.py`: job commands such as create, cancel, retry, cleanup, and run
+- `application/services/forecast_job_query_service.py`: job read models for get, list, and poll
+- `application/services/forecast_job_recovery_service.py`: startup recovery and stale active job timeout orchestration
 - `schemas/forecast.py`: API response models shared by routes and providers
 - `providers/base.py`: forecast provider protocol and provider-level errors
 - `providers/mock.py`: deterministic point forecast provider for app development
@@ -64,7 +68,7 @@ Current backend layout:
 - `providers/factory.py`: environment-driven provider selection
 - `clients/nim.py`: low-level self-hosted/hosted FourCastNet client helpers
 - `postprocessing/fourcastnet.py`: backend-only tar/NumPy decoder and output metadata summarizer
-- `services/jobs.py`: queued forecast job orchestration and compatibility re-exports
+- `services/jobs.py`: compatibility facade that delegates to application job services
 - `infrastructure/storage/memory_job_store.py`: process-local job store adapter
 - `infrastructure/storage/file_job_store.py`: JSON-file job store adapter for local diagnostics and restart recovery
 - `workers.py`: forecast job worker port with FastAPI-deferred and startup recovery adapters
