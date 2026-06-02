@@ -1,72 +1,20 @@
 import { Platform } from "react-native";
 
-export type ForecastMetric = {
-  name: "temperature" | "wind_speed" | "humidity" | string;
-  value: number;
-  unit: "celsius" | "m/s" | "percent" | string;
-};
+import type { components, paths } from "../generated/earth2-api/schema";
 
-export type ForecastModelInfo = {
-  name: string;
-  version: string;
-  resolution: string;
-  run_mode: "mock" | "nim";
-};
-
-export type ForecastWindow = {
-  start_at: string;
-  end_at: string;
-  step_hours: number;
-  lead_hours: number[];
-};
-
-export type ForecastCondition = "clear" | "breezy" | "humid" | "rain_watch";
-
-export type ForecastTimelineStep = {
-  lead_time_hours: number;
-  valid_at: string;
-  temperature_c: number;
-  wind_speed_ms: number;
-  humidity_percent: number;
-  precipitation_probability_percent: number;
-  pressure_hpa: number;
-  confidence: number;
-  condition: ForecastCondition;
-  summary: string;
-};
-
-export type ForecastSignal = {
-  name: string;
-  level: "low" | "moderate" | "elevated";
-  message: string;
-};
-
-export type ForecastSummary = {
-  provider: "mock" | "fourcastnet";
-  generated_at: string;
-  latitude: number;
-  longitude: number;
-  headline: string;
-  metrics: ForecastMetric[];
-  model: ForecastModelInfo;
-  forecast_window: ForecastWindow;
-  timeline: ForecastTimelineStep[];
-  signals: ForecastSignal[];
-};
-
-export type ForecastProviderStatus = {
-  provider: "mock" | "fourcastnet";
-  mode: string;
-  configured: boolean;
-  ready: boolean;
-  supports_point_forecast: boolean;
+export type ForecastMetric = components["schemas"]["ForecastMetric"];
+export type ForecastModelInfo = components["schemas"]["ForecastModelInfo"];
+export type ForecastWindow = components["schemas"]["ForecastWindow"];
+export type ForecastCondition = components["schemas"]["ForecastTimelineStep"]["condition"];
+export type ForecastTimelineStep = components["schemas"]["ForecastTimelineStep"];
+export type ForecastSignal = components["schemas"]["ForecastSignal"];
+export type ForecastSummary = components["schemas"]["ForecastSummary"];
+export type ForecastProviderStatus = components["schemas"]["ForecastProviderStatus"] & {
   endpoint: string | null;
-  detail: string;
 };
-
-export type ForecastJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
-
-export type ForecastJobDiagnostics = {
+export type ForecastJobStatus = components["schemas"]["ForecastJob"]["status"];
+export type ForecastJobEvent = components["schemas"]["ForecastJobEvent"];
+export type ForecastJobDiagnostics = components["schemas"]["ForecastJobDiagnostics"] & {
   provider: string | null;
   response_source: string | null;
   cache_status: string | null;
@@ -79,22 +27,9 @@ export type ForecastJobDiagnostics = {
   sha256: string | null;
   message: string | null;
 };
-
-export type ForecastJobEvent = {
-  occurred_at: string;
-  status: ForecastJobStatus;
-  message: string;
-};
-
-export type ForecastJob = {
-  id: string;
-  status: ForecastJobStatus;
-  latitude: number;
-  longitude: number;
+export type ForecastJob = components["schemas"]["ForecastJob"] & {
   parent_job_id: string | null;
   attempt: number;
-  created_at: string;
-  updated_at: string;
   started_at: string | null;
   completed_at: string | null;
   forecast: ForecastSummary | null;
@@ -103,23 +38,16 @@ export type ForecastJob = {
   error: string | null;
   links: Record<string, string>;
 };
-
-export type ForecastJobPollResponse = {
-  id: string;
-  status: ForecastJobStatus;
-  terminal: boolean;
-  forecast_ready: boolean;
-  updated_at: string;
+export type ForecastJobPollResponse = components["schemas"]["ForecastJobPollResponse"] & {
   retry_after_seconds: number | null;
-  event_count: number;
   latest_event: ForecastJobEvent | null;
   links: Record<string, string>;
 };
 
-type ForecastRequest = {
-  latitude: number;
-  longitude: number;
-};
+type ForecastPointQuery =
+  paths["/api/v1/forecast/point"]["get"]["parameters"]["query"];
+type ForecastRequest =
+  paths["/api/v1/forecast/jobs"]["post"]["requestBody"]["content"]["application/json"];
 
 const fallbackBaseUrl = Platform.select({
   android: "http://10.0.2.2:8000",
@@ -132,7 +60,7 @@ const apiBaseUrl =
 export async function fetchPointForecast({
   latitude,
   longitude,
-}: ForecastRequest): Promise<ForecastSummary> {
+}: ForecastPointQuery): Promise<ForecastSummary> {
   const query = `latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(
     String(longitude),
   )}`;

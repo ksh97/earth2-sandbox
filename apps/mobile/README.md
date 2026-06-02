@@ -42,5 +42,16 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - `src/screens/ForecastScreen.tsx`: top-level forecast screen composition.
 - `src/hooks/useForecast.ts`: forecast state, location selection, and backend requests.
 - `src/components/`: reusable forecast UI panels.
-- `src/api/forecast.ts`: backend forecast API types and request helper.
+- `src/generated/earth2-api/schema.ts`: TypeScript types generated from the committed OpenAPI snapshot.
+- `src/api/forecast.ts`: thin backend forecast API request helper and runtime payload validation.
 
+## API Types
+
+Regenerate the mobile API types after an intentional backend contract change:
+
+```powershell
+npm run generate:api
+npm run check:api
+```
+
+The source contract is `../../contracts/openapi/earth2-api.v1.yaml`. The generated file is committed so the prototype can typecheck without calling the backend at build time.
