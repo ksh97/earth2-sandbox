@@ -6,12 +6,13 @@ NVIDIA Earth-2 / FourCastNet 기반 AI 기상예보 애플리케이션을 만들
 
 ## 현재 상태
 
-- Python 백엔드 skeleton
-- 설정 파일과 환경변수 예시
+- FastAPI 기반 모듈러 모놀리스 백엔드
+- Clean Architecture / port-adapter 방향의 `domain`, `application`, `infrastructure` 분리
 - mock/FourCastNet 전환을 위한 forecast provider 구조
-- 모바일 앱 개발 전에 사용할 mock forecast API와 provider status API
+- provider status, queued forecast job, polling, retry/cancel/cleanup API
+- OpenAPI snapshot 기반 API contract
 - Expo 기반 iOS/Android 모바일 앱 prototype
-- 초보자용 로드맵과 아키텍처 문서
+- 백엔드 hardening과 프론트엔드/UI 개발을 병행하기 위한 문서와 테스트
 
 ## 프로젝트 구조
 
@@ -20,40 +21,70 @@ earth2-sandbox/
 ├─ README.md
 ├─ pyproject.toml
 ├─ .env.example
+├─ .github/
+│  ├─ pull_request_template.md
+│  └─ workflows/
+│     └─ ci.yml
 ├─ configs/
 │  └─ config.example.yaml
+├─ contracts/
+│  ├─ README.md
+│  └─ openapi/
+│     └─ earth2-api.v1.yaml
 ├─ apps/
 │  └─ mobile/
 │     ├─ App.tsx
 │     ├─ package.json
+│     ├─ package-lock.json
 │     └─ src/
+│        ├─ api/
+│        ├─ components/
+│        ├─ hooks/
+│        ├─ screens/
+│        └─ utils/
 ├─ docs/
 │  ├─ ARCHITECTURE.md
 │  └─ ROADMAP.md
+├─ tools/
+│  ├─ dev_doctor.py
+│  ├─ replay_fourcastnet_sample.py
+│  └─ smoke_hosted_fourcastnet.py
 ├─ src/
 │  └─ earth2_sandbox/
+│     ├─ api/
+│     │  └─ http/v1/routers/
+│     ├─ application/
+│     │  ├─ commands/
+│     │  ├─ ports/
+│     │  ├─ queries/
+│     │  └─ services/
+│     ├─ bootstrap/
+│     │  ├─ app_factory.py
+│     │  ├─ container.py
+│     │  └─ settings.py
+│     ├─ domain/
+│     │  └─ jobs/
+│     ├─ infrastructure/
+│     │  ├─ nvidia/
+│     │  ├─ providers/
+│     │  ├─ queue/
+│     │  ├─ runtime/
+│     │  └─ storage/
 │     ├─ app.py
 │     ├─ config.py
 │     ├─ main.py
 │     ├─ clients/
-│     │  └─ nim.py
 │     ├─ providers/
-│     │  ├─ base.py
-│     │  ├─ factory.py
-│     │  ├─ fourcastnet.py
-│     │  └─ mock.py
 │     ├─ postprocessing/
-│     │  └─ fourcastnet.py
 │     ├─ schemas/
-│     │  ├─ forecast.py
-│     │  └─ fourcastnet.py
-│     └─ services/
-│        └─ forecast.py
+│     ├─ services/
+│     ├─ storage/
+│     ├─ workers.py
+│     └─ __init__.py
 ├─ tests/
-│  ├─ test_api_contract.py
-│  ├─ test_fourcastnet_postprocessing.py
-│  ├─ test_fourcastnet_provider.py
-│  └─ test_mock_forecast.py
+│  ├─ contract/
+│  ├─ fixtures/
+│  └─ test_*.py
 ├─ notebooks/
 │  └─ README.md
 └─ data/
@@ -106,7 +137,13 @@ EARTH2_FORECAST_JOB_RETENTION_HOURS=168
 - Queued forecast job: http://127.0.0.1:8000/api/v1/forecast/jobs
 - Recent forecast jobs: http://127.0.0.1:8000/api/v1/forecast/jobs?limit=20
 
-`POST /api/v1/forecast/jobs`는 장시간 hosted 호출을 대비한 첫 job 계약입니다. 응답은 즉시 `queued` 상태와 job id를 반환하고, 백그라운드 worker가 forecast provider를 호출한 뒤 `GET /api/v1/forecast/jobs/{job_id}`에서 `running`, `succeeded`, `failed`, `cancelled` 상태와 forecast/diagnostics/event history를 확인할 수 있게 합니다. `GET /api/v1/forecast/jobs/{job_id}/poll`은 모바일이 자주 호출할 수 있는 가벼운 polling 응답만 반환하고, `POST /api/v1/forecast/jobs/{job_id}/cancel`은 아직 끝나지 않은 job을 취소 상태로 전환합니다. 완료된 job은 `POST /api/v1/forecast/jobs/{job_id}/retry`로 같은 좌표의 새 attempt job을 만들 수 있습니다. `GET /api/v1/forecast/jobs?limit=20&status=succeeded`로 최근 job 목록도 조회할 수 있고, `POST /api/v1/forecast/jobs/cleanup`은 보존 기간이 지난 terminal job 파일을 정리합니다. 기본 구현은 프로세스 내 in-memory queue VIP입니다. 실제 hosted 호출을 관찰할 때는 `EARTH2_FORECAST_JOB_STORE_BACKEND=file`로 바꾸면 `EARTH2_FORECAST_JOB_STORE_DIR` 아래에 job 상태와 diagnostics가 JSON 파일로 남습니다. 서버 시작 시 남아 있는 `queued` job은 worker로 다시 들어가고, `running` job은 `queued`로 복구 후 재시도됩니다. `EARTH2_FORECAST_JOB_STALE_TIMEOUT_SECONDS`보다 오래 멈춘 active job은 `failed`로 전환되어 무한 polling을 피합니다. API 응답에는 로컬 파일 경로를 노출하지 않고 cache artifact id만 표시합니다. 계약이 안정되면 Redis/Celery 또는 별도 worker 서비스로 교체할 수 있는 경계로 분리되어 있습니다.
+`POST /api/v1/forecast/jobs`는 장시간 hosted 호출을 대비한 첫 job 계약입니다. 응답은 즉시 `queued` 상태와 job id를 반환하고, 백그라운드 worker가 forecast provider를 호출한 뒤 `GET /api/v1/forecast/jobs/{job_id}`에서 `running`, `succeeded`, `failed`, `cancelled` 상태와 forecast/diagnostics/event history를 확인할 수 있게 합니다. `GET /api/v1/forecast/jobs/{job_id}/poll`은 모바일이 자주 호출할 수 있는 가벼운 polling 응답만 반환하고, `POST /api/v1/forecast/jobs/{job_id}/cancel`은 아직 끝나지 않은 job을 취소 상태로 전환합니다. 완료된 job은 `POST /api/v1/forecast/jobs/{job_id}/retry`로 같은 좌표의 새 attempt job을 만들 수 있습니다. `GET /api/v1/forecast/jobs?limit=20&status=succeeded`로 최근 job 목록도 조회할 수 있고, `POST /api/v1/forecast/jobs/cleanup`은 보존 기간이 지난 terminal job 파일을 정리합니다. 기본 구현은 프로세스 내 in-memory queue입니다. 실제 hosted 호출을 관찰할 때는 `EARTH2_FORECAST_JOB_STORE_BACKEND=file`로 바꾸면 `EARTH2_FORECAST_JOB_STORE_DIR` 아래에 job 상태와 diagnostics가 JSON 파일로 남습니다. 서버 시작 시 남아 있는 `queued` job은 worker로 다시 들어가고, `running` job은 `queued`로 복구 후 재시도됩니다. `EARTH2_FORECAST_JOB_STALE_TIMEOUT_SECONDS`보다 오래 멈춘 active job은 `failed`로 전환되어 무한 polling을 피합니다. API 응답에는 로컬 파일 경로를 노출하지 않고 cache artifact id만 표시합니다. 계약이 안정되면 Redis/Celery 또는 별도 worker 서비스로 교체할 수 있는 경계로 분리되어 있습니다.
+
+## 프론트엔드/UI 개발 계약
+
+프론트엔드 개발은 이제 mock provider와 queued forecast job 계약을 기준으로 진행할 수 있습니다. 모바일 앱은 `POST /api/v1/forecast/jobs`로 예보 job을 만들고, `GET /api/v1/forecast/jobs/{job_id}/poll`로 `queued`, `running`, `succeeded`, `failed`, `cancelled` 흐름을 가볍게 표시한 뒤, terminal 상태에서 `GET /api/v1/forecast/jobs/{job_id}`로 forecast payload, diagnostics, event history를 가져옵니다.
+
+우선순위는 지도나 애니메이션보다 상태 경험입니다. 위치 입력과 preset 도시 선택, provider status badge, job progress panel, polling 상태, skeleton loading, 실패 원인 카드, retry affordance, 최근 job history, timeline chart, confidence/signal 표시를 먼저 다듬습니다. 백엔드는 freeze가 아니라 CI, queue 회귀 방지, OpenAPI snapshot, durable queue/store 설계, observability, auth/rate limit을 hardening backlog로 관리합니다.
 
 실제 NVIDIA API key는 `.env`에만 저장하고 GitHub에는 올리지 않습니다. 샘플 tar 응답 파일을 받은 경우에도 `data/` 아래 로컬 파일로만 보관하고 커밋하지 않습니다.
 

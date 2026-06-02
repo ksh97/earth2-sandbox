@@ -74,3 +74,35 @@ def test_in_memory_forecast_queue_can_requeue_failed_items() -> None:
 
     assert asyncio.run(scenario()) == ("00000000-0000-0000-0000-000000000001", 1)
 
+
+def test_in_memory_forecast_queue_requeues_failed_items_without_holding_lock() -> None:
+    async def scenario() -> tuple[bool | None, str | None, int]:
+        queue = InMemoryPriorityForecastQueue()
+        await queue.enqueue(job_id="00000000-0000-0000-0000-000000000001")
+        item = await queue.dequeue()
+        assert item is not None
+
+        original_enqueue = queue.enqueue
+        lock_was_held_during_requeue: bool | None = None
+
+        async def enqueue_spy(**kwargs):
+            nonlocal lock_was_held_during_requeue
+            lock_was_held_during_requeue = queue._lock.locked()
+            return await original_enqueue(**kwargs)
+
+        queue.enqueue = enqueue_spy
+
+        await asyncio.wait_for(queue.mark_failed(item, requeue=True), timeout=1)
+        requeued = await queue.dequeue()
+        return (
+            lock_was_held_during_requeue,
+            requeued.job_id if requeued else None,
+            await queue.in_flight_count(),
+        )
+
+    assert asyncio.run(scenario()) == (
+        False,
+        "00000000-0000-0000-0000-000000000001",
+        1,
+    )
+
