@@ -51,6 +51,9 @@ jobs:
       - name: Install mobile dependencies
         run: npm ci
 
+      - name: Check generated API types
+        run: npm run check:api
+
       - name: Run mobile typecheck
         run: npm run typecheck
 
