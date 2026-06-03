@@ -11,6 +11,7 @@ from earth2_sandbox.application.ports.forecast_provider import (
     ForecastProviderUnavailableError,
 )
 from earth2_sandbox.application.services.forecast_job_view import append_job_event
+from earth2_sandbox.observability.structured_logging import log_event
 from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics
 
 
@@ -60,6 +61,14 @@ class RunForecastJob:
             await self.store.update_if_status(running_job, expected_statuses={"queued"})
         except ForecastJobTransitionError:
             return
+        log_event(
+            "forecast_job.started",
+            job_id=job_id,
+            status="running",
+            latitude=job.latitude,
+            longitude=job.longitude,
+            attempt=job.attempt,
+        )
 
         try:
             provider_result = await self._get_provider_result(job)
@@ -100,9 +109,25 @@ class RunForecastJob:
                 occurred_at=completed,
             )
             try:
-                await self.store.update_if_status(succeeded, expected_statuses={"running"})
+                updated = await self.store.update_if_status(
+                    succeeded,
+                    expected_statuses={"running"},
+                )
             except ForecastJobTransitionError:
                 return
+            log_event(
+                "forecast_job.succeeded",
+                job_id=job_id,
+                status=updated.status,
+                provider=updated.diagnostics.provider if updated.diagnostics else None,
+                response_source=(
+                    updated.diagnostics.response_source if updated.diagnostics else None
+                ),
+                cache_status=updated.diagnostics.cache_status if updated.diagnostics else None,
+                nvcf_request_id=(
+                    updated.diagnostics.nvcf_request_id if updated.diagnostics else None
+                ),
+            )
 
     async def _get_provider_result(self, job: ForecastJob) -> ForecastProviderResult:
         diagnostic_method = getattr(self.provider, "get_point_forecast_with_diagnostics", None)
@@ -154,6 +179,16 @@ class RunForecastJob:
             occurred_at=failed_at,
         )
         try:
-            await self.store.update_if_status(failed, expected_statuses={"running"})
+            updated = await self.store.update_if_status(failed, expected_statuses={"running"})
         except ForecastJobTransitionError:
             return
+        log_event(
+            "forecast_job.failed",
+            job_id=job_id,
+            status=updated.status,
+            provider=updated.diagnostics.provider if updated.diagnostics else None,
+            response_source=updated.diagnostics.response_source if updated.diagnostics else None,
+            cache_status=updated.diagnostics.cache_status if updated.diagnostics else None,
+            nvcf_request_id=updated.diagnostics.nvcf_request_id if updated.diagnostics else None,
+            message=diagnostic_message,
+        )

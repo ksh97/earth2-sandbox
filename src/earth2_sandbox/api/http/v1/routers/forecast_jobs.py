@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 
 from earth2_sandbox.application.ports.forecast_queue import ForecastQueue
 from earth2_sandbox.infrastructure.queue import QueuedDeferredForecastJobWorker
+from earth2_sandbox.observability.structured_logging import log_event
 from earth2_sandbox.schemas.jobs import (
     ForecastJob,
     ForecastJobCleanupRequest,
@@ -44,6 +45,14 @@ def create_forecast_jobs_router(
             latitude=request.latitude,
             longitude=request.longitude,
         )
+        log_event(
+            "forecast_job.accepted",
+            job_id=job.id,
+            status=job.status,
+            latitude=job.latitude,
+            longitude=job.longitude,
+            attempt=job.attempt,
+        )
         enqueue_job(background_tasks, job.id)
         return job
 
@@ -83,11 +92,18 @@ def create_forecast_jobs_router(
     @router.post("/{job_id}/cancel", response_model=ForecastJob)
     async def cancel_forecast_job(job_id: str) -> ForecastJob:
         try:
-            return await forecast_job_service.cancel_job(job_id)
+            job = await forecast_job_service.cancel_job(job_id)
         except ForecastJobNotFoundError as error:
             raise HTTPException(status_code=404, detail="Forecast job not found.") from error
         except ForecastJobConflictError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        log_event(
+            "forecast_job.cancelled",
+            job_id=job.id,
+            status=job.status,
+            provider=job.diagnostics.provider if job.diagnostics else None,
+        )
+        return job
 
     @router.post(
         "/{job_id}/retry",
@@ -106,6 +122,13 @@ def create_forecast_jobs_router(
             raise HTTPException(status_code=409, detail=str(error)) from error
 
         enqueue_job(background_tasks, job.id)
+        log_event(
+            "forecast_job.retry_accepted",
+            job_id=job.id,
+            parent_job_id=job.parent_job_id,
+            status=job.status,
+            attempt=job.attempt,
+        )
         return job
 
     return router

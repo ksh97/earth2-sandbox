@@ -52,7 +52,9 @@ earth2-sandbox/
 ├─ src/
 │  └─ earth2_sandbox/
 │     ├─ api/
-│     │  └─ http/v1/routers/
+│     │  └─ http/
+│     │     ├─ middleware/
+│     │     └─ v1/routers/
 │     ├─ application/
 │     │  ├─ commands/
 │     │  ├─ ports/
@@ -70,6 +72,7 @@ earth2-sandbox/
 │     │  ├─ queue/
 │     │  ├─ runtime/
 │     │  └─ storage/
+│     ├─ observability/
 │     ├─ app.py
 │     ├─ config.py
 │     ├─ main.py
@@ -138,6 +141,10 @@ EARTH2_FORECAST_JOB_RETENTION_HOURS=168
 - Recent forecast jobs: http://127.0.0.1:8000/api/v1/forecast/jobs?limit=20
 
 `POST /api/v1/forecast/jobs`는 장시간 hosted 호출을 대비한 첫 job 계약입니다. 응답은 즉시 `queued` 상태와 job id를 반환하고, 백그라운드 worker가 forecast provider를 호출한 뒤 `GET /api/v1/forecast/jobs/{job_id}`에서 `running`, `succeeded`, `failed`, `cancelled` 상태와 forecast/diagnostics/event history를 확인할 수 있게 합니다. `GET /api/v1/forecast/jobs/{job_id}/poll`은 모바일이 자주 호출할 수 있는 가벼운 polling 응답만 반환하고, `POST /api/v1/forecast/jobs/{job_id}/cancel`은 아직 끝나지 않은 job을 취소 상태로 전환합니다. 완료된 job은 `POST /api/v1/forecast/jobs/{job_id}/retry`로 같은 좌표의 새 attempt job을 만들 수 있습니다. `GET /api/v1/forecast/jobs?limit=20&status=succeeded`로 최근 job 목록도 조회할 수 있고, `POST /api/v1/forecast/jobs/cleanup`은 보존 기간이 지난 terminal job 파일을 정리합니다. 기본 구현은 프로세스 내 in-memory queue입니다. 실제 hosted 호출을 관찰할 때는 `EARTH2_FORECAST_JOB_STORE_BACKEND=file`로 바꾸면 `EARTH2_FORECAST_JOB_STORE_DIR` 아래에 job 상태와 diagnostics가 JSON 파일로 남습니다. 서버 시작 시 남아 있는 `queued` job은 worker로 다시 들어가고, `running` job은 `queued`로 복구 후 재시도됩니다. `EARTH2_FORECAST_JOB_STALE_TIMEOUT_SECONDS`보다 오래 멈춘 active job은 `failed`로 전환되어 무한 polling을 피합니다. API 응답에는 로컬 파일 경로를 노출하지 않고 cache artifact id만 표시합니다. 계약이 안정되면 Redis/Celery 또는 별도 worker 서비스로 교체할 수 있는 경계로 분리되어 있습니다.
+
+## 관측성
+
+모든 API 응답은 `X-Request-ID` 헤더를 포함합니다. 클라이언트가 같은 헤더를 보내면 그대로 보존하고, 없으면 백엔드가 새 값을 생성합니다. Forecast job 생성, 실행 시작, 성공, 실패, 재시도, 취소 지점은 JSON 한 줄 로그로 남으며 가능한 경우 `request_id`, `job_id`, provider diagnostics, `nvcf_request_id`, cache 상태를 함께 기록합니다. 이 값은 앱의 실패 원인 카드와 운영 로그를 연결하기 위한 hardening 기반이며, API response body 계약은 변경하지 않습니다.
 
 ## 프론트엔드/UI 개발 계약
 
