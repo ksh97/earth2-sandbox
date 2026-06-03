@@ -1,0 +1,62 @@
+{
+  "arrays": [
+    {
+      "batch_index": 0,
+      "dtype": "float32",
+      "filename": "000_000.npy",
+      "finite_count": 200,
+      "lead_time_hours": 0,
+      "max_value": 100905.0,
+      "mean_value": 21348.90234375,
+      "min_value": 7.400000095367432,
+      "shape": [
+        1,
+        5,
+        5,
+        8
+      ]
+    },
+    {
+      "batch_index": 0,
+      "dtype": "float32",
+      "filename": "006_000.npy",
+      "finite_count": 200,
+      "lead_time_hours": 6,
+      "max_value": 100505.0,
+      "mean_value": 21270.703125,
+      "min_value": 8.899999618530273,
+      "shape": [
+        1,
+        5,
+        5,
+        8
+      ]
+    },
+    {
+      "batch_index": 0,
+      "dtype": "float32",
+      "filename": "012_000.npy",
+      "finite_count": 200,
+      "lead_time_hours": 12,
+      "max_value": 100205.0,
+      "mean_value": 21213.203125,
+      "min_value": 10.899999618530273,
+      "shape": [
+        1,
+        5,
+        5,
+        8
+      ]
+    }
+  ],
+  "batch_indices": [
+    0
+  ],
+  "lead_time_hours": [
+    0,
+    6,
+    12
+  ],
+  "member_count": 3,
+  "warnings": []
+}
