@@ -11,6 +11,7 @@ import { AppHeader } from "../components/AppHeader";
 import { ErrorPanel } from "../components/ErrorPanel";
 import { ForecastDetails } from "../components/ForecastDetails";
 import { ForecastHero } from "../components/ForecastHero";
+import { ForecastHistoryPanel } from "../components/ForecastHistoryPanel";
 import { ForecastJobPanel } from "../components/ForecastJobPanel";
 import { ForecastOverview } from "../components/ForecastOverview";
 import { ForecastStatusPanel } from "../components/ForecastStatusPanel";
@@ -22,6 +23,7 @@ import { colors, spacing } from "../theme";
 
 export function ForecastScreen() {
   const {
+    cancelJob,
     choosePreset,
     errorMessage,
     forecast,
@@ -29,14 +31,21 @@ export function ForecastScreen() {
     forecastJobPoll,
     forecastWindowEnd,
     generatedAt,
+    isJobHistoryLoading,
     isJobPolling,
     isLoading,
+    jobActionMessage,
+    jobHistory,
+    jobHistoryErrorMessage,
+    jobHistoryFilter,
     latitude,
     longitude,
     providerErrorMessage,
     providerStatus,
+    refreshJobHistory,
     refreshForecast,
     refreshProviderStatus,
+    retryJob,
     screenMode,
     selectedPreset,
     selectedTimelineStep,
@@ -46,6 +55,7 @@ export function ForecastScreen() {
     timeline,
     updateLatitude,
     updateLongitude,
+    updateJobHistoryFilter,
   } = useForecast();
 
   return (
@@ -84,7 +94,20 @@ export function ForecastScreen() {
           <ForecastJobPanel
             isPolling={isJobPolling}
             job={forecastJob}
+            onCancelJob={cancelJob}
+            onRetryJob={retryJob}
             poll={forecastJobPoll}
+          />
+          <ForecastHistoryPanel
+            actionMessage={jobActionMessage}
+            errorMessage={jobHistoryErrorMessage}
+            filter={jobHistoryFilter}
+            isLoading={isJobHistoryLoading}
+            jobs={jobHistory}
+            onCancelJob={cancelJob}
+            onChangeFilter={updateJobHistoryFilter}
+            onRefresh={() => void refreshJobHistory()}
+            onRetryJob={retryJob}
           />
 
           <ForecastStatusPanel

@@ -33,6 +33,8 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - Mock backend API integration.
 - Backend provider status panel.
 - Queued forecast job status panel.
+- Recent forecast job history with status filters.
+- Retry and cancel controls for forecast job lifecycle testing.
 - Runtime validation for backend forecast and provider status payloads.
 - Loading and error states.
 

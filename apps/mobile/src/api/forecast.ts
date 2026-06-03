@@ -43,11 +43,24 @@ export type ForecastJobPollResponse = components["schemas"]["ForecastJobPollResp
   latest_event: ForecastJobEvent | null;
   links: Record<string, string>;
 };
+export type ForecastJobSummary = components["schemas"]["ForecastJobSummary"] & {
+  parent_job_id: string | null;
+  attempt: number;
+  completed_at: string | null;
+  diagnostics: ForecastJobDiagnostics | null;
+  error: string | null;
+  links: Record<string, string>;
+};
+export type ForecastJobListResponse = components["schemas"]["ForecastJobListResponse"] & {
+  jobs: ForecastJobSummary[];
+};
 
 type ForecastPointQuery =
   paths["/api/v1/forecast/point"]["get"]["parameters"]["query"];
 type ForecastRequest =
   paths["/api/v1/forecast/jobs"]["post"]["requestBody"]["content"]["application/json"];
+type ForecastJobListQuery =
+  paths["/api/v1/forecast/jobs"]["get"]["parameters"]["query"];
 
 const fallbackBaseUrl = Platform.select({
   android: "http://10.0.2.2:8000",
@@ -99,6 +112,23 @@ export async function createForecastJob(request: ForecastRequest): Promise<Forec
   return parseForecastJob(await readJson(response, "Forecast job API"));
 }
 
+export async function listForecastJobs({
+  limit = 20,
+  status = null,
+}: ForecastJobListQuery = {}): Promise<ForecastJobListResponse> {
+  const searchParams = new URLSearchParams({ limit: String(limit) });
+  if (status) {
+    searchParams.set("status", status);
+  }
+  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/jobs?${searchParams}`);
+
+  if (!response.ok) {
+    throw new Error(await formatApiError(response, "Forecast job history API"));
+  }
+
+  return parseForecastJobListResponse(await readJson(response, "Forecast job history API"));
+}
+
 export async function fetchForecastJob(pathOrUrl: string): Promise<ForecastJob> {
   const response = await fetch(buildApiUrl(pathOrUrl));
 
@@ -107,6 +137,30 @@ export async function fetchForecastJob(pathOrUrl: string): Promise<ForecastJob> 
   }
 
   return parseForecastJob(await readJson(response, "Forecast job API"));
+}
+
+export async function cancelForecastJob(pathOrUrl: string): Promise<ForecastJob> {
+  const response = await fetch(buildApiUrl(pathOrUrl), {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await formatApiError(response, "Forecast job cancel API"));
+  }
+
+  return parseForecastJob(await readJson(response, "Forecast job cancel API"));
+}
+
+export async function retryForecastJob(pathOrUrl: string): Promise<ForecastJob> {
+  const response = await fetch(buildApiUrl(pathOrUrl), {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await formatApiError(response, "Forecast job retry API"));
+  }
+
+  return parseForecastJob(await readJson(response, "Forecast job retry API"));
 }
 
 export async function pollForecastJob(pathOrUrl: string): Promise<ForecastJobPollResponse> {
@@ -190,12 +244,29 @@ function parseForecastJob(payload: unknown): ForecastJob {
   return payload;
 }
 
+function parseForecastJobListResponse(payload: unknown): ForecastJobListResponse {
+  if (!isForecastJobListResponse(payload)) {
+    throw new Error("Forecast job history API returned an unexpected payload.");
+  }
+
+  return payload;
+}
+
 function parseForecastJobPollResponse(payload: unknown): ForecastJobPollResponse {
   if (!isForecastJobPollResponse(payload)) {
     throw new Error("Forecast job poll API returned an unexpected payload.");
   }
 
   return payload;
+}
+
+function isForecastJobListResponse(value: unknown): value is ForecastJobListResponse {
+  return (
+    isRecord(value) &&
+    typeof value.count === "number" &&
+    Array.isArray(value.jobs) &&
+    value.jobs.every(isForecastJobSummary)
+  );
 }
 
 function isForecastSummary(value: unknown): value is ForecastSummary {
@@ -214,6 +285,24 @@ function isForecastSummary(value: unknown): value is ForecastSummary {
     value.timeline.every(isForecastTimelineStep) &&
     Array.isArray(value.signals) &&
     value.signals.every(isForecastSignal)
+  );
+}
+
+function isForecastJobSummary(value: unknown): value is ForecastJobSummary {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isForecastJobStatus(value.status) &&
+    typeof value.latitude === "number" &&
+    typeof value.longitude === "number" &&
+    (typeof value.parent_job_id === "string" || value.parent_job_id === null) &&
+    typeof value.attempt === "number" &&
+    typeof value.created_at === "string" &&
+    typeof value.updated_at === "string" &&
+    (typeof value.completed_at === "string" || value.completed_at === null) &&
+    (isForecastJobDiagnostics(value.diagnostics) || value.diagnostics === null) &&
+    (typeof value.error === "string" || value.error === null) &&
+    isStringRecord(value.links)
   );
 }
 
