@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ForecastJob, ForecastJobPollResponse, ForecastJobStatus } from "../api/forecast";
 import { colors, spacing } from "../theme";
@@ -8,10 +8,20 @@ type ForecastJobPanelProps = {
   job: ForecastJob | null;
   poll: ForecastJobPollResponse | null;
   isPolling: boolean;
+  onCancelJob: (job: ForecastJob) => void;
+  onRetryJob: (job: ForecastJob) => void;
 };
 
-export function ForecastJobPanel({ job, poll, isPolling }: ForecastJobPanelProps) {
+export function ForecastJobPanel({
+  job,
+  poll,
+  isPolling,
+  onCancelJob,
+  onRetryJob,
+}: ForecastJobPanelProps) {
   const status = poll?.status ?? job?.status ?? null;
+  const canCancel = job ? status === "queued" || status === "running" : false;
+  const canRetry = job ? isTerminalStatus(status) : false;
   const latestMessage =
     poll?.latest_event?.message ??
     job?.events[job.events.length - 1]?.message ??
@@ -44,6 +54,29 @@ export function ForecastJobPanel({ job, poll, isPolling }: ForecastJobPanelProps
         />
         <JobMeta label="Updated" value={updatedAt ? formatDateTime(updatedAt) : "-"} />
       </View>
+
+      {job && (canCancel || canRetry) ? (
+        <View style={styles.actionRow}>
+          {canCancel ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onCancelJob(job)}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </Pressable>
+          ) : null}
+          {canRetry ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onRetryJob(job)}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.primaryButtonText}>Retry</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -85,6 +118,10 @@ function badgeStyle(status: ForecastJobStatus) {
   }
 
   return styles.badgeActive;
+}
+
+function isTerminalStatus(status: ForecastJobStatus | null) {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
 const styles = StyleSheet.create({
@@ -183,5 +220,46 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0,
     marginTop: 2,
+  },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  primaryButton: {
+    alignItems: "center",
+    backgroundColor: colors.accent,
+    borderRadius: 8,
+    minHeight: 38,
+    justifyContent: "center",
+    minWidth: 96,
+    paddingHorizontal: spacing.md,
+  },
+  primaryButtonText: {
+    color: colors.surface,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  secondaryButton: {
+    alignItems: "center",
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 38,
+    justifyContent: "center",
+    minWidth: 96,
+    paddingHorizontal: spacing.md,
+  },
+  secondaryButtonText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  buttonPressed: {
+    opacity: 0.82,
   },
 });

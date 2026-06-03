@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  cancelForecastJob,
   createForecastJob,
   fetchForecastProviderStatus,
   fetchForecastJob,
+  ForecastJobSummary,
+  ForecastJobStatus,
   ForecastProviderStatus,
   ForecastSummary,
   ForecastJob,
   ForecastJobPollResponse,
+  listForecastJobs,
   pollForecastJob,
+  retryForecastJob,
 } from "../api/forecast";
 import { formatDateTime } from "../utils/forecastFormat";
 import { LocationPreset, locationPresets } from "../locations";
@@ -21,6 +26,15 @@ const defaultJobPollDelayMs = 2000;
 
 export type ScreenMode = "overview" | "details";
 export const screenModes: ScreenMode[] = ["overview", "details"];
+export type JobHistoryFilter = "all" | ForecastJobStatus;
+export const jobHistoryFilters: JobHistoryFilter[] = [
+  "all",
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+];
 
 export function useForecast() {
   const [latitude, setLatitude] = useState(initialLatitude);
@@ -29,10 +43,15 @@ export function useForecast() {
   const [forecast, setForecast] = useState<ForecastSummary | null>(null);
   const [forecastJob, setForecastJob] = useState<ForecastJob | null>(null);
   const [forecastJobPoll, setForecastJobPoll] = useState<ForecastJobPollResponse | null>(null);
+  const [jobHistory, setJobHistory] = useState<ForecastJobSummary[]>([]);
+  const [jobHistoryFilter, setJobHistoryFilter] = useState<JobHistoryFilter>("all");
   const [providerStatus, setProviderStatus] = useState<ForecastProviderStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isJobPolling, setIsJobPolling] = useState(false);
+  const [isJobHistoryLoading, setIsJobHistoryLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [jobHistoryErrorMessage, setJobHistoryErrorMessage] = useState<string | null>(null);
+  const [jobActionMessage, setJobActionMessage] = useState<string | null>(null);
   const [providerErrorMessage, setProviderErrorMessage] = useState<string | null>(null);
   const [screenMode, setScreenMode] = useState<ScreenMode>("overview");
   const [selectedLeadHour, setSelectedLeadHour] = useState<number | null>(null);
@@ -82,6 +101,29 @@ export function useForecast() {
     }
   }
 
+  async function refreshJobHistory(nextFilter: JobHistoryFilter = jobHistoryFilter) {
+    setIsJobHistoryLoading(true);
+    setJobHistoryErrorMessage(null);
+
+    try {
+      const history = await listForecastJobs({
+        limit: 20,
+        status: nextFilter === "all" ? null : nextFilter,
+      });
+      setJobHistory(history.jobs);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Forecast job history failed.";
+      setJobHistoryErrorMessage(message);
+    } finally {
+      setIsJobHistoryLoading(false);
+    }
+  }
+
+  function updateJobHistoryFilter(nextFilter: JobHistoryFilter) {
+    setJobHistoryFilter(nextFilter);
+    void refreshJobHistory(nextFilter);
+  }
+
   async function refreshForecast(nextCoordinates?: { latitude: string; longitude: string }) {
     const requestLatitude = nextCoordinates?.latitude ?? latitude;
     const requestLongitude = nextCoordinates?.longitude ?? longitude;
@@ -96,6 +138,7 @@ export function useForecast() {
     setIsLoading(true);
     setIsJobPolling(true);
     setErrorMessage(null);
+    setJobActionMessage(null);
 
     let startedJobId: string | null = null;
 
@@ -105,28 +148,7 @@ export function useForecast() {
         longitude: parsedLongitude,
       });
       startedJobId = job.id;
-      activeJobId.current = job.id;
-      setForecastJob(job);
-      setForecastJobPoll(jobToPollResponse(job));
-
-      const finalPoll = await waitForForecastJob(job);
-      if (activeJobId.current !== job.id) {
-        return;
-      }
-      setForecastJobPoll(finalPoll);
-
-      const completedJob = await fetchForecastJob(getJobLink(job, "self"));
-      if (activeJobId.current !== job.id) {
-        return;
-      }
-      setForecastJob(completedJob);
-
-      if (completedJob.status !== "succeeded" || !completedJob.forecast) {
-        throw new Error(completedJob.error ?? `Forecast job ${completedJob.status}.`);
-      }
-
-      setForecast(completedJob.forecast);
-      setSelectedLeadHour(completedJob.forecast.timeline[0]?.lead_time_hours ?? null);
+      await trackForecastJob(job);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Forecast request failed.";
       setForecast(null);
@@ -140,6 +162,83 @@ export function useForecast() {
         setIsJobPolling(false);
       }
     }
+  }
+
+  async function cancelJob(job: ForecastJob | ForecastJobSummary) {
+    setJobActionMessage(null);
+    setJobHistoryErrorMessage(null);
+
+    try {
+      const cancelled = await cancelForecastJob(getJobLink(job, "cancel"));
+      if (forecastJob?.id === cancelled.id) {
+        activeJobId.current = null;
+        setForecastJob(cancelled);
+        setForecastJobPoll(jobToPollResponse(cancelled));
+        setIsLoading(false);
+        setIsJobPolling(false);
+      }
+      setJobActionMessage(`Cancelled ${shortJobId(cancelled.id)}.`);
+      await refreshJobHistory();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Forecast job cancel failed.";
+      setJobHistoryErrorMessage(message);
+    }
+  }
+
+  async function retryJob(job: ForecastJob | ForecastJobSummary) {
+    setIsLoading(true);
+    setIsJobPolling(true);
+    setErrorMessage(null);
+    setJobActionMessage(null);
+    setJobHistoryErrorMessage(null);
+
+    let retryJobId: string | null = null;
+
+    try {
+      const retry = await retryForecastJob(getJobLink(job, "retry"));
+      retryJobId = retry.id;
+      setJobActionMessage(`Retry accepted for ${shortJobId(job.id)}.`);
+      await trackForecastJob(retry);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Forecast job retry failed.";
+      setForecast(null);
+      setErrorMessage(message);
+      setSelectedLeadHour(null);
+    } finally {
+      const isCurrentRequest = retryJobId === null || activeJobId.current === retryJobId;
+      if (isCurrentRequest) {
+        activeJobId.current = null;
+        setIsLoading(false);
+        setIsJobPolling(false);
+      }
+    }
+  }
+
+  async function trackForecastJob(job: ForecastJob) {
+    activeJobId.current = job.id;
+    setForecastJob(job);
+    setForecastJobPoll(jobToPollResponse(job));
+    void refreshJobHistory();
+
+    const finalPoll = await waitForForecastJob(job);
+    if (activeJobId.current !== job.id) {
+      return;
+    }
+    setForecastJobPoll(finalPoll);
+
+    const completedJob = await fetchForecastJob(getJobLink(job, "self"));
+    if (activeJobId.current !== job.id) {
+      return;
+    }
+    setForecastJob(completedJob);
+    void refreshJobHistory();
+
+    if (completedJob.status !== "succeeded" || !completedJob.forecast) {
+      throw new Error(completedJob.error ?? `Forecast job ${completedJob.status}.`);
+    }
+
+    setForecast(completedJob.forecast);
+    setSelectedLeadHour(completedJob.forecast.timeline[0]?.lead_time_hours ?? null);
   }
 
   function choosePreset(preset: LocationPreset) {
@@ -164,6 +263,7 @@ export function useForecast() {
 
   useEffect(() => {
     void refreshProviderStatus();
+    void refreshJobHistory();
     void refreshForecast();
   }, []);
 
@@ -175,13 +275,19 @@ export function useForecast() {
     forecastJobPoll,
     forecastWindowEnd,
     generatedAt,
+    isJobHistoryLoading,
     isJobPolling,
     isLoading,
+    jobActionMessage,
+    jobHistory,
+    jobHistoryErrorMessage,
+    jobHistoryFilter,
     latitude,
     longitude,
     providerErrorMessage,
     providerStatus,
     refreshForecast,
+    refreshJobHistory,
     refreshProviderStatus,
     screenMode,
     selectedPreset,
@@ -192,6 +298,9 @@ export function useForecast() {
     timeline,
     updateLatitude,
     updateLongitude,
+    updateJobHistoryFilter,
+    cancelJob,
+    retryJob,
   };
 }
 
@@ -212,13 +321,20 @@ async function waitForForecastJob(job: ForecastJob): Promise<ForecastJobPollResp
   return latestPoll;
 }
 
-function getJobLink(job: ForecastJob, key: "poll" | "self") {
+function getJobLink(
+  job: ForecastJob | ForecastJobSummary,
+  key: "poll" | "self" | "retry" | "cancel",
+) {
   const link = job.links[key];
   if (!link) {
     throw new Error(`Forecast job response is missing the ${key} link.`);
   }
 
   return link;
+}
+
+function shortJobId(jobId: string) {
+  return `Job ${jobId.slice(0, 8)}`;
 }
 
 function jobToPollResponse(job: ForecastJob): ForecastJobPollResponse {
