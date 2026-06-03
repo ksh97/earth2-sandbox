@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { ForecastSummary } from "../api/forecast";
 import { colors, spacing } from "../theme";
 import { formatMetricName, formatUnit } from "../utils/forecastFormat";
+import { ForecastRiskSummaryPanel } from "./ForecastRiskSummaryPanel";
 
 type ForecastOverviewProps = {
   forecast: ForecastSummary;
@@ -12,6 +13,7 @@ export function ForecastOverview({ forecast }: ForecastOverviewProps) {
   return (
     <>
       <Text style={styles.headline}>{forecast.headline}</Text>
+      <ForecastRiskSummaryPanel timeline={forecast.timeline} />
       <View style={styles.metricsGrid}>
         {forecast.metrics.map((metric) => (
           <View key={metric.name} style={styles.metricCard}>
