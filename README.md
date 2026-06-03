@@ -155,6 +155,8 @@ Hosted API smoke test는 다음 명령으로 실행할 수 있습니다. 이 스
 
 Hosted API가 tar 본문을 즉시 반환하지 않으면 backend client는 NVCF request id로 status endpoint를 polling하고, `302 Location` 또는 JSON `responseReference`가 제공될 때 큰 결과물을 다운로드합니다. 다운로드된 tar는 `EARTH2_FOURCASTNET_CACHE_DIR` 아래에 요청 payload digest 기준으로 저장되어 같은 요청을 로컬에서 재현할 수 있습니다.
 
+실제 호출이 `504`와 `nvcf-status=errored`로 실패할 때는 앱 데이터 경로가 tar decoding까지 도달하지 못한 상태입니다. 이 경우 queued job은 `failed`로 끝나며 `diagnostics`에 가능한 범위의 `nvcf_request_id`, `nvcf_status`, `response_source`, `byte_length`, `poll_attempts`, `message`를 남깁니다. `provider/status`의 `ready=true`는 API key와 hosted endpoint 설정이 있다는 뜻이고, 실제 FourCastNet output 품질이나 tar 다운로드 성공을 보장하지 않습니다. 먼저 smoke test 결과가 tar, `responseReference`, `Large asset written`, `504/errored` 중 어느 경로인지 분류한 뒤 fixture/golden test를 확장합니다.
+
 저장된 tar 또는 `data/samples/`의 샘플 tar를 다시 디코딩해보려면 다음 명령을 사용합니다.
 
 ```powershell

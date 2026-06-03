@@ -8,6 +8,7 @@ from pathlib import Path
 from earth2_sandbox.config import Settings
 from earth2_sandbox.infrastructure.nvidia import (
     FOURCASTNET_POINT_VARIABLES,
+    FourCastNetInferenceError,
     FourCastNetNimClient,
     FourCastNetPostProcessor,
 )
@@ -37,7 +38,34 @@ async def main() -> None:
         poll_seconds=10,
     )
 
-    result = await client.run_hosted_inference(request)
+    try:
+        result = await client.run_hosted_inference(request)
+    except FourCastNetInferenceError as error:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "case": "point_tar",
+                    "error": str(error),
+                    "diagnostics": sanitize_diagnostics(error.diagnostics),
+                    "request_payload": client.build_hosted_inference_payload(
+                        input_id=request.input_id,
+                        variables=request.variables,
+                        simulation_length=request.simulation_length,
+                        ensemble_size=request.ensemble_size,
+                        noise_amplitude=request.noise_amplitude,
+                    ),
+                    "note": (
+                        "Hosted inference reached NVIDIA but did not return a usable "
+                        "tar or responseReference."
+                    ),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        raise SystemExit(1) from error
+
     processor = FourCastNetPostProcessor()
     decoded = processor.decode_hosted_result(result)
     if decoded is None:
@@ -52,6 +80,8 @@ async def main() -> None:
         print(
             json.dumps(
                 {
+                    "ok": False,
+                    "case": "point_tar",
                     "status_code": result.status_code,
                     "content_type": result.content_type,
                     "byte_length": result.byte_length,
@@ -89,6 +119,8 @@ async def main() -> None:
     print(
         json.dumps(
             {
+                "ok": True,
+                "case": "point_tar",
                 "status_code": result.status_code,
                 "content_type": result.content_type,
                 "byte_length": result.byte_length,
@@ -108,6 +140,14 @@ async def main() -> None:
             indent=2,
         )
     )
+
+
+def sanitize_diagnostics(diagnostics: dict[str, object]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in diagnostics.items()
+        if key.lower() not in {"token", "authorization", "api_key", "apikey"}
+    }
 
 
 if __name__ == "__main__":

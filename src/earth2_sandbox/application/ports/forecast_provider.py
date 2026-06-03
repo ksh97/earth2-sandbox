@@ -9,6 +9,10 @@ from earth2_sandbox.schemas.forecast import ForecastProviderStatus, ForecastSumm
 class ForecastProviderUnavailableError(RuntimeError):
     """Raised when the selected forecast provider cannot serve a point forecast yet."""
 
+    def __init__(self, message: str, *, diagnostics: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics or {"message": message}
+
 
 @dataclass(frozen=True)
 class ForecastProviderResult:

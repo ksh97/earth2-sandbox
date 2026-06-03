@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
 from earth2_sandbox.config import Settings
-from earth2_sandbox.infrastructure.nvidia import FourCastNetNimClient
+from earth2_sandbox.infrastructure.nvidia import FourCastNetInferenceError, FourCastNetNimClient
 from earth2_sandbox.providers import FourCastNetForecastProvider, build_forecast_provider
 from earth2_sandbox.schemas.fourcastnet import (
     FourCastNetHostedInferenceRequest,
@@ -241,6 +241,36 @@ def test_hosted_fourcastnet_inference_requires_api_key() -> None:
         raise AssertionError("Expected hosted inference to require an API key.")
 
 
+def test_hosted_fourcastnet_inference_error_preserves_nvcf_diagnostics() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            504,
+            headers={
+                "nvcf-reqid": "errored-request-id",
+                "nvcf-status": "errored",
+            },
+        )
+
+    client = FourCastNetNimClient(
+        base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+        mode="hosted",
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+    )
+
+    try:
+        asyncio.run(client.run_hosted_inference(FourCastNetHostedInferenceRequest()))
+    except FourCastNetInferenceError as error:
+        assert "Hosted FourCastNet returned 504" in str(error)
+        assert error.diagnostics["status_code"] == 504
+        assert error.diagnostics["nvcf_request_id"] == "errored-request-id"
+        assert error.diagnostics["nvcf_status"] == "errored"
+        assert error.diagnostics["response_source"] == "inline"
+        assert error.diagnostics["byte_length"] == 0
+    else:
+        raise AssertionError("Expected hosted inference failure to preserve diagnostics.")
+
+
 def test_build_forecast_provider_can_select_fourcastnet_hosted_mode() -> None:
     settings = Settings(
         forecast_provider="fourcastnet",
@@ -256,6 +286,8 @@ def test_build_forecast_provider_can_select_fourcastnet_hosted_mode() -> None:
     assert status.mode == "hosted"
     assert status.ready is True
     assert status.supports_point_forecast is True
+    assert "configured" in status.detail
+    assert "verify output" in status.detail
 
 
 def test_hosted_fourcastnet_point_forecast_samples_tar_response() -> None:

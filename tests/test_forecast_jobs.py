@@ -77,6 +77,49 @@ def test_fourcastnet_job_exposes_asset_and_cache_diagnostics(tmp_path) -> None:
     assert job["diagnostics"]["byte_length"] == len(content)
 
 
+def test_fourcastnet_job_preserves_hosted_failure_diagnostics() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            504,
+            headers={
+                "nvcf-reqid": "errored-request-id",
+                "nvcf-status": "errored",
+            },
+        )
+
+    settings = Settings(
+        forecast_provider="fourcastnet",
+        fourcastnet_endpoint_mode="hosted",
+        nvidia_api_key="test-key",
+    )
+    provider = FourCastNetForecastProvider(
+        client=FourCastNetNimClient(
+            base_url="https://climate.api.nvidia.com/v1/nvidia/fourcastnet",
+            mode="hosted",
+            api_key="test-key",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    api_client = TestClient(create_app(settings=settings, forecast_provider_override=provider))
+
+    response = api_client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 0, "longitude": 90},
+    )
+
+    assert response.status_code == 202
+    job = api_client.get(response.json()["links"]["self"]).json()
+
+    assert job["status"] == "failed"
+    assert job["error"] == "Hosted FourCastNet returned 504: No response body."
+    assert job["diagnostics"]["provider"] == "fourcastnet"
+    assert job["diagnostics"]["response_source"] == "inline"
+    assert job["diagnostics"]["nvcf_request_id"] == "errored-request-id"
+    assert job["diagnostics"]["nvcf_status"] == "errored"
+    assert job["diagnostics"]["byte_length"] == 0
+    assert job["diagnostics"]["message"] == "Hosted FourCastNet returned 504: No response body."
+
+
 def test_forecast_job_records_provider_failures() -> None:
     class FailingProvider:
         async def get_status(self):
