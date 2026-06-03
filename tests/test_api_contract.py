@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from earth2_sandbox.app import create_app
@@ -25,6 +27,20 @@ def test_health_contract() -> None:
         "mock_forecast": True,
         "forecast_provider": "mock",
     }
+
+
+def test_request_id_header_is_generated() -> None:
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers["x-request-id"]
+
+
+def test_request_id_header_preserves_client_value() -> None:
+    response = client.get("/health", headers={"X-Request-ID": "contract-request-id"})
+
+    assert response.status_code == 200
+    assert response.headers["x-request-id"] == "contract-request-id"
 
 
 def test_index_contract() -> None:
@@ -94,6 +110,33 @@ def test_forecast_job_contract() -> None:
     assert job["diagnostics"]["provider"] == "mock"
     assert job["diagnostics"]["message"] == "Forecast summary is ready."
     assert [event["status"] for event in job["events"]] == ["queued", "running", "succeeded"]
+
+
+def test_forecast_job_create_logs_request_correlation(caplog) -> None:
+    caplog.set_level("INFO", logger="earth2_sandbox")
+
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        headers={"X-Request-ID": "job-request-id"},
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    payloads = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "earth2_sandbox" and record.message.startswith("{")
+    ]
+    accepted = next(
+        payload
+        for payload in payloads
+        if payload["event"] == "forecast_job.accepted" and payload["job_id"] == body["id"]
+    )
+    assert accepted["request_id"] == "job-request-id"
+    assert accepted["status"] == "queued"
+    assert accepted["latitude"] == 37.5665
+    assert accepted["longitude"] == 126.9780
 
 
 def test_forecast_job_poll_contract() -> None:

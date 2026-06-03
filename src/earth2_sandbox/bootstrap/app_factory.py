@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from earth2_sandbox.api.http.middleware.request_correlation import RequestCorrelationMiddleware
 from earth2_sandbox.api.http.v1.routers.forecast_jobs import create_forecast_jobs_router
 from earth2_sandbox.api.http.v1.routers.forecast_queries import create_forecast_queries_router
 from earth2_sandbox.api.http.v1.routers.health import create_health_router
@@ -58,6 +59,7 @@ def create_app_from_container(container: ApplicationContainer) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestCorrelationMiddleware)
     app.include_router(create_health_router(settings=container.settings))
     app.include_router(
         create_provider_status_router(forecast_provider=container.forecast_provider)
