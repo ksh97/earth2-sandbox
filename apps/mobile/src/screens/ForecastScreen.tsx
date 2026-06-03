@@ -20,6 +20,7 @@ import { ModeSwitch } from "../components/ModeSwitch";
 import { ProviderStatusPanel } from "../components/ProviderStatusPanel";
 import { useForecast } from "../hooks/useForecast";
 import { colors, spacing } from "../theme";
+import { SettingsDebugScreen } from "./SettingsDebugScreen";
 
 export function ForecastScreen() {
   const {
@@ -133,6 +134,13 @@ export function ForecastScreen() {
               )}
             </>
           ) : null}
+
+          <SettingsDebugScreen
+            currentJob={forecastJob}
+            providerErrorMessage={providerErrorMessage}
+            providerStatus={providerStatus}
+            recentJobs={jobHistory}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

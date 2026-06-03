@@ -67,7 +67,7 @@ const fallbackBaseUrl = Platform.select({
   default: "http://127.0.0.1:8000",
 });
 
-const apiBaseUrl =
+export const forecastApiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? fallbackBaseUrl ?? "http://127.0.0.1:8000";
 
 export async function fetchPointForecast({
@@ -77,7 +77,7 @@ export async function fetchPointForecast({
   const query = `latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(
     String(longitude),
   )}`;
-  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/point?${query}`);
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/point?${query}`);
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast API"));
@@ -87,7 +87,7 @@ export async function fetchPointForecast({
 }
 
 export async function fetchForecastProviderStatus(): Promise<ForecastProviderStatus> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/provider/status`);
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/provider/status`);
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Provider status API"));
@@ -97,7 +97,7 @@ export async function fetchForecastProviderStatus(): Promise<ForecastProviderSta
 }
 
 export async function createForecastJob(request: ForecastRequest): Promise<ForecastJob> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/jobs`, {
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/jobs`, {
     body: JSON.stringify(request),
     headers: {
       "content-type": "application/json",
@@ -120,7 +120,7 @@ export async function listForecastJobs({
   if (status) {
     searchParams.set("status", status);
   }
-  const response = await fetch(`${apiBaseUrl}/api/v1/forecast/jobs?${searchParams}`);
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/jobs?${searchParams}`);
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast job history API"));
@@ -178,7 +178,7 @@ function buildApiUrl(pathOrUrl: string) {
     return pathOrUrl;
   }
 
-  return `${apiBaseUrl}${pathOrUrl}`;
+  return `${forecastApiBaseUrl}${pathOrUrl}`;
 }
 
 async function readJson(response: Response, label: string): Promise<unknown> {

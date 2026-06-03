@@ -34,6 +34,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - Backend provider status panel.
 - Queued forecast job status panel.
 - Failure diagnostics for hosted FourCastNet job bottlenecks.
+- Settings debug screen for API base URL, provider mode, and latest job diagnostics.
 - Recent forecast job history with status filters.
 - Retry and cancel controls for forecast job lifecycle testing.
 - Runtime validation for backend forecast and provider status payloads.
@@ -43,6 +44,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 
 - `App.tsx`: Expo entry point.
 - `src/screens/ForecastScreen.tsx`: top-level forecast screen composition.
+- `src/screens/SettingsDebugScreen.tsx`: runtime/provider/job diagnostics surface.
 - `src/hooks/useForecast.ts`: forecast state, location selection, and backend requests.
 - `src/components/`: reusable forecast UI panels.
 - `src/generated/earth2-api/schema.ts`: TypeScript types generated from the committed OpenAPI snapshot.
