@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { ForecastJob, ForecastJobPollResponse, ForecastJobStatus } from "../api/forecast";
 import { colors, spacing } from "../theme";
 import { formatDateTime } from "../utils/forecastFormat";
+import { ForecastDiagnosticsSummary } from "./ForecastDiagnosticsSummary";
 
 type ForecastJobPanelProps = {
   job: ForecastJob | null;
@@ -54,6 +55,14 @@ export function ForecastJobPanel({
         />
         <JobMeta label="Updated" value={updatedAt ? formatDateTime(updatedAt) : "-"} />
       </View>
+
+      {job ? (
+        <ForecastDiagnosticsSummary
+          diagnostics={job.diagnostics}
+          error={job.error}
+          isFailed={status === "failed"}
+        />
+      ) : null}
 
       {job && (canCancel || canRetry) ? (
         <View style={styles.actionRow}>

@@ -14,7 +14,7 @@ export function ProviderStatusPanel({
   onRefresh,
   status,
 }: ProviderStatusPanelProps) {
-  const level = status?.ready ? "Ready" : errorMessage ? "Offline" : "Checking";
+  const level = status ? formatStatusLevel(status) : errorMessage ? "Offline" : "Checking";
   const detail = status?.detail ?? errorMessage ?? "Checking forecast provider status.";
 
   return (
@@ -27,8 +27,8 @@ export function ProviderStatusPanel({
           <View style={styles.metaGrid}>
             <StatusMeta label="Configured" value={status.configured ? "Yes" : "No"} />
             <StatusMeta
-              label="Point forecast"
-              value={status.supports_point_forecast ? "Ready" : "Blocked"}
+              label="Output"
+              value={formatOutputState(status)}
             />
             <StatusMeta label="Endpoint" value={status.endpoint ?? "local mock"} />
           </View>
@@ -56,8 +56,33 @@ export function ProviderStatusPanel({
 }
 
 function formatProvider(status: ForecastProviderStatus) {
-  const support = status.supports_point_forecast ? "point ready" : "readiness only";
+  const support =
+    status.provider === "fourcastnet" && status.supports_point_forecast
+      ? "output unverified"
+      : status.supports_point_forecast
+        ? "point ready"
+        : "readiness only";
   return `${status.provider} / ${status.mode} / ${support}`;
+}
+
+function formatStatusLevel(status: ForecastProviderStatus) {
+  if (!status.ready) {
+    return "Blocked";
+  }
+
+  if (status.provider === "fourcastnet") {
+    return status.supports_point_forecast ? "Configured" : "Readiness";
+  }
+
+  return "Ready";
+}
+
+function formatOutputState(status: ForecastProviderStatus) {
+  if (!status.supports_point_forecast) {
+    return "Blocked";
+  }
+
+  return status.provider === "fourcastnet" ? "Verify by job" : "Ready";
 }
 
 function StatusMeta({ label, value }: { label: string; value: string }) {
