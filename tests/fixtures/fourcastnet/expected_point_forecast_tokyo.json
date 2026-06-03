@@ -1,0 +1,95 @@
+{
+  "forecast_window": {
+    "end_at": "2026-05-31T12:00:00Z",
+    "lead_hours": [
+      0,
+      6,
+      12
+    ],
+    "start_at": "2026-05-31T00:00:00Z",
+    "step_hours": 6
+  },
+  "generated_at": "2026-05-31T00:00:00Z",
+  "headline": "FourCastNet point sample is stable for this location.",
+  "latitude": 35.6762,
+  "longitude": 139.6503,
+  "metrics": [
+    {
+      "name": "temperature",
+      "unit": "celsius",
+      "value": 19.0
+    },
+    {
+      "name": "wind_speed",
+      "unit": "m/s",
+      "value": 7.5
+    },
+    {
+      "name": "humidity",
+      "unit": "percent",
+      "value": 61.5
+    }
+  ],
+  "model": {
+    "name": "FourCastNet hosted",
+    "resolution": "0.25 degree global latitude-longitude grid",
+    "run_mode": "nim",
+    "version": "hosted-api"
+  },
+  "provider": "fourcastnet",
+  "signals": [
+    {
+      "level": "elevated",
+      "message": "Peak FourCastNet rain proxy reaches 56.4%.",
+      "name": "Precipitation"
+    },
+    {
+      "level": "moderate",
+      "message": "Peak sampled wind speed reaches 11.0 m/s.",
+      "name": "Wind"
+    },
+    {
+      "level": "low",
+      "message": "Lowest sampling confidence across the window is 88%.",
+      "name": "Model confidence"
+    }
+  ],
+  "timeline": [
+    {
+      "condition": "clear",
+      "confidence": 0.92,
+      "humidity_percent": 61.5,
+      "lead_time_hours": 0,
+      "precipitation_probability_percent": 26.0,
+      "pressure_hpa": 1009.0,
+      "summary": "Stable conditions: 19.0 C, wind 7.5 m/s, rain proxy 26.0%.",
+      "temperature_c": 19.0,
+      "valid_at": "2026-05-31T00:00:00Z",
+      "wind_speed_ms": 7.5
+    },
+    {
+      "condition": "breezy",
+      "confidence": 0.9,
+      "humidity_percent": 69.0,
+      "lead_time_hours": 6,
+      "precipitation_probability_percent": 39.1,
+      "pressure_hpa": 1005.0,
+      "summary": "Breezy air flow: 21.5 C, wind 9.0 m/s, rain proxy 39.1%.",
+      "temperature_c": 21.5,
+      "valid_at": "2026-05-31T06:00:00Z",
+      "wind_speed_ms": 9.0
+    },
+    {
+      "condition": "rain_watch",
+      "confidence": 0.88,
+      "humidity_percent": 82.5,
+      "lead_time_hours": 12,
+      "precipitation_probability_percent": 56.4,
+      "pressure_hpa": 1002.0,
+      "summary": "Rain watch proxy: 23.0 C, wind 11.0 m/s, rain proxy 56.4%.",
+      "temperature_c": 23.0,
+      "valid_at": "2026-05-31T12:00:00Z",
+      "wind_speed_ms": 11.0
+    }
+  ]
+}
