@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ForecastSummary, ForecastTimelineStep } from "../api/forecast";
 import { colors, spacing } from "../theme";
 import { formatCondition, formatLeadTime } from "../utils/forecastFormat";
+import { ForecastRiskDecisionPanel } from "./ForecastRiskDecisionPanel";
 import { ForecastSignalList } from "./ForecastSignalList";
 import { ForecastTimelineDetail } from "./ForecastTimelineDetail";
 
@@ -74,6 +75,8 @@ export function ForecastDetails({
       {selectedTimelineStep ? (
         <ForecastTimelineDetail step={selectedTimelineStep} />
       ) : null}
+
+      <ForecastRiskDecisionPanel timeline={timeline} />
 
       <ForecastSignalList signals={forecast.signals} />
     </>
