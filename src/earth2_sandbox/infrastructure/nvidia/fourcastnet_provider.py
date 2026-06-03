@@ -36,7 +36,7 @@ class FourCastNetForecastProvider:
         status = await self.client.get_readiness_status()
         supports_point_forecast = status.mode == "hosted" and status.ready
         detail_suffix = (
-            "Hosted point forecast sampling is available."
+            "Hosted point forecast sampling is configured; run inference to verify output."
             if supports_point_forecast
             else "Point forecast sampling requires the hosted API path and a configured API key."
         )
@@ -80,9 +80,16 @@ class FourCastNetForecastProvider:
         try:
             result = await self._run_hosted_inference_with_cache(request)
             if result.large_asset_message:
-                raise ForecastProviderUnavailableError(
+                message = (
                     "Hosted FourCastNet returned a large asset marker instead of tar bytes. "
                     "No downloadable responseReference or Location header was available."
+                )
+                raise ForecastProviderUnavailableError(
+                    message,
+                    diagnostics={
+                        **self._build_result_diagnostics(result),
+                        "message": message,
+                    },
                 )
             summary = self.post_processor.build_forecast_summary_from_hosted_result(
                 result=result,
@@ -97,7 +104,10 @@ class FourCastNetForecastProvider:
         except ForecastProviderUnavailableError:
             raise
         except (FourCastNetInferenceError, FourCastNetPostProcessingError) as error:
-            raise ForecastProviderUnavailableError(str(error)) from error
+            raise ForecastProviderUnavailableError(
+                str(error),
+                diagnostics=self._build_error_diagnostics(error),
+            ) from error
 
     async def run_hosted_inference(
         self,
@@ -111,7 +121,10 @@ class FourCastNetForecastProvider:
         try:
             result = await self._run_hosted_inference_with_cache(request)
         except FourCastNetInferenceError as error:
-            raise ForecastProviderUnavailableError(str(error)) from error
+            raise ForecastProviderUnavailableError(
+                str(error),
+                diagnostics=self._build_error_diagnostics(error),
+            ) from error
 
         decoded_tar = self.post_processor.decode_hosted_result(result)
         result_without_raw = result.model_copy(
@@ -192,6 +205,20 @@ class FourCastNetForecastProvider:
             "response_reference_present": result.response_reference_present,
             "byte_length": result.byte_length,
             "sha256": result.sha256,
+        }
+
+    def _build_error_diagnostics(self, error: Exception) -> dict[str, object]:
+        diagnostics = getattr(error, "diagnostics", None)
+        if isinstance(diagnostics, dict):
+            return {
+                **diagnostics,
+                "provider": diagnostics.get("provider") or "fourcastnet",
+                "message": diagnostics.get("message") or str(error),
+            }
+
+        return {
+            "provider": "fourcastnet",
+            "message": str(error),
         }
 
 

@@ -26,6 +26,10 @@ class FourCastNetNimStatus:
 class FourCastNetInferenceError(RuntimeError):
     """Raised when a FourCastNet inference request cannot be completed."""
 
+    def __init__(self, message: str, *, diagnostics: dict[str, object] | None = None) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics or {"message": message}
+
 
 @dataclass(frozen=True)
 class FourCastNetNimClient:
@@ -144,8 +148,17 @@ class FourCastNetNimClient:
                     headers=headers,
                 )
         except httpx.HTTPError as error:
+            message = f"Hosted FourCastNet request failed: {type(error).__name__}: {error}"
             raise FourCastNetInferenceError(
-                f"Hosted FourCastNet request failed: {error}"
+                message,
+                diagnostics={
+                    "provider": "fourcastnet",
+                    "response_source": "inline",
+                    "poll_attempts": 0,
+                    "response_reference_present": False,
+                    "error_type": type(error).__name__,
+                    "message": message,
+                },
             ) from error
 
     async def _resolve_hosted_response(
@@ -166,12 +179,33 @@ class FourCastNetNimClient:
             request_id = self._request_id(response) or request_id
             nvcf_status = response.headers.get("nvcf-status") or nvcf_status
             if request_id is None:
+                message = "Hosted FourCastNet returned 202 without an NVCF request id."
                 raise FourCastNetInferenceError(
-                    "Hosted FourCastNet returned 202 without an NVCF request id."
+                    message,
+                    diagnostics={
+                        "provider": "fourcastnet",
+                        "response_source": response_source,
+                        "nvcf_status": nvcf_status,
+                        "poll_attempts": poll_attempts,
+                        "response_reference_present": False,
+                        "message": message,
+                    },
                 )
             if poll_attempts >= self.max_poll_attempts:
-                raise FourCastNetInferenceError(
+                message = (
                     f"Hosted FourCastNet polling exceeded {self.max_poll_attempts} attempts."
+                )
+                raise FourCastNetInferenceError(
+                    message,
+                    diagnostics={
+                        "provider": "fourcastnet",
+                        "response_source": response_source,
+                        "nvcf_request_id": request_id,
+                        "nvcf_status": nvcf_status,
+                        "poll_attempts": poll_attempts,
+                        "response_reference_present": False,
+                        "message": message,
+                    },
                 )
 
             if self.poll_interval_seconds > 0:
@@ -203,10 +237,15 @@ class FourCastNetNimClient:
             )
 
         if not response.is_success:
-            detail = self._response_error_detail(response)
-            raise FourCastNetInferenceError(
-                f"Hosted FourCastNet returned {response.status_code}: {detail}"
+            diagnostics = self._build_error_diagnostics(
+                response=response,
+                request_id=request_id,
+                nvcf_status=nvcf_status,
+                poll_attempts=poll_attempts,
+                response_source=response_source,
+                response_reference_present=False,
             )
+            raise FourCastNetInferenceError(str(diagnostics["message"]), diagnostics=diagnostics)
 
         content_type = response.headers.get("content-type", "")
         json_preview = self._json_preview(response) if "application/json" in content_type else None
@@ -243,8 +282,18 @@ class FourCastNetNimClient:
     ) -> httpx.Response:
         location = response.headers.get("location")
         if not location:
+            message = "Hosted FourCastNet returned 302 without a Location header."
             raise FourCastNetInferenceError(
-                "Hosted FourCastNet returned 302 without a Location header."
+                message,
+                diagnostics={
+                    "provider": "fourcastnet",
+                    "response_source": "redirect",
+                    "nvcf_request_id": self._request_id(response),
+                    "nvcf_status": response.headers.get("nvcf-status"),
+                    "poll_attempts": 0,
+                    "response_reference_present": False,
+                    "message": message,
+                },
             )
 
         return await self._download_url(client, location)
@@ -252,11 +301,16 @@ class FourCastNetNimClient:
     async def _download_url(self, client: httpx.AsyncClient, url: str) -> httpx.Response:
         response = await client.get(url, follow_redirects=True)
         if not response.is_success:
-            detail = self._response_error_detail(response)
-            raise FourCastNetInferenceError(
-                f"Hosted FourCastNet large result download returned "
-                f"{response.status_code}: {detail}"
+            diagnostics = self._build_error_diagnostics(
+                response=response,
+                request_id=self._request_id(response),
+                nvcf_status=response.headers.get("nvcf-status"),
+                poll_attempts=0,
+                response_source="response_reference",
+                response_reference_present=True,
+                message_prefix="Hosted FourCastNet large result download returned",
             )
+            raise FourCastNetInferenceError(str(diagnostics["message"]), diagnostics=diagnostics)
 
         return response
 
@@ -304,6 +358,38 @@ class FourCastNetNimClient:
             return str(payload["detail"])
 
         return str(payload)[:500]
+
+    def _build_error_diagnostics(
+        self,
+        *,
+        response: httpx.Response,
+        request_id: str | None,
+        nvcf_status: str | None,
+        poll_attempts: int,
+        response_source: Literal["inline", "poll", "redirect", "response_reference"],
+        response_reference_present: bool,
+        message_prefix: str = "Hosted FourCastNet returned",
+    ) -> dict[str, object]:
+        detail = self._response_error_detail(response)
+        content_type = response.headers.get("content-type", "")
+        content = response.content
+        message = f"{message_prefix} {response.status_code}: {detail}"
+        if content_type:
+            message = f"{message} content_type={content_type}"
+
+        return {
+            "provider": "fourcastnet",
+            "status_code": response.status_code,
+            "content_type": content_type or None,
+            "response_source": response_source,
+            "nvcf_request_id": self._request_id(response) or request_id,
+            "nvcf_status": response.headers.get("nvcf-status") or nvcf_status,
+            "poll_attempts": poll_attempts,
+            "response_reference_present": response_reference_present,
+            "byte_length": len(content),
+            "sha256": sha256(content).hexdigest() if content else None,
+            "message": message,
+        }
 
     def _json_preview(self, response: httpx.Response) -> object | None:
         try:

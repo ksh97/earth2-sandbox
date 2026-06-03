@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from earth2_sandbox.application.errors import ForecastJobTransitionError
 from earth2_sandbox.application.ports.clock import Clock
@@ -64,9 +64,16 @@ class RunForecastJob:
         try:
             provider_result = await self._get_provider_result(job)
         except ForecastProviderUnavailableError as error:
-            await self._mark_failed(job_id=job_id, error=str(error))
+            await self._mark_failed(
+                job_id=job_id,
+                error=str(error),
+                diagnostics=error.diagnostics,
+            )
         except Exception as error:  # pragma: no cover - defensive boundary
-            await self._mark_failed(job_id=job_id, error=f"Unexpected forecast job error: {error}")
+            await self._mark_failed(
+                job_id=job_id,
+                error=f"Unexpected forecast job error: {error}",
+            )
         else:
             completed = self.clock.now()
             current = await self.store.get(job_id)
@@ -114,19 +121,32 @@ class RunForecastJob:
             },
         )
 
-    async def _mark_failed(self, *, job_id: str, error: str) -> None:
+    async def _mark_failed(
+        self,
+        *,
+        job_id: str,
+        error: str,
+        diagnostics: dict[str, Any] | None = None,
+    ) -> None:
         job = await self.store.get(job_id)
         if job.status != "running":
             return
 
         failed_at = self.clock.now()
+        diagnostic_payload = diagnostics or {}
+        diagnostic_message = diagnostic_payload.get("message") or "Forecast job failed."
         failed = append_job_event(
             job.model_copy(
                 update={
                     "status": "failed",
                     "completed_at": failed_at,
                     "error": error,
-                    "diagnostics": ForecastJobDiagnostics(message="Forecast job failed."),
+                    "diagnostics": ForecastJobDiagnostics(
+                        **{
+                            **diagnostic_payload,
+                            "message": diagnostic_message,
+                        }
+                    ),
                 }
             ),
             status="failed",
