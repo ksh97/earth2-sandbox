@@ -4,6 +4,7 @@ import { ForecastJobStatus, ForecastJobSummary } from "../api/forecast";
 import type { JobHistoryFilter } from "../hooks/useForecast";
 import { colors, spacing } from "../theme";
 import { formatDateTime } from "../utils/forecastFormat";
+import { ForecastDiagnosticsSummary } from "./ForecastDiagnosticsSummary";
 
 type ForecastHistoryPanelProps = {
   actionMessage: string | null;
@@ -102,6 +103,13 @@ export function ForecastHistoryPanel({
               <Text numberOfLines={2} style={styles.jobMessage}>
                 {job.error ?? job.diagnostics?.message ?? `Updated ${formatDateTime(job.updated_at)}`}
               </Text>
+
+              <ForecastDiagnosticsSummary
+                dense
+                diagnostics={job.diagnostics}
+                error={job.error}
+                isFailed={job.status === "failed"}
+              />
 
               <View style={styles.jobFooter}>
                 <Text style={styles.footerText}>
