@@ -29,6 +29,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 
 - Location input using latitude and longitude.
 - Forecast summary cards.
+- Overview decision watch with Outdoor and Operations risk filters.
 - Forecast detail view with timeline steps, model metadata, and signal levels.
 - Risk decision support for outdoor planning and operations workflows.
 - Mock backend API integration.
@@ -48,6 +49,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - `src/screens/SettingsDebugScreen.tsx`: runtime/provider/job diagnostics surface.
 - `src/hooks/useForecast.ts`: forecast state, location selection, and backend requests.
 - `src/components/`: reusable forecast UI panels.
+- `src/utils/riskDecisions.ts`: client-side outdoor and operations risk decision model.
 - `src/generated/earth2-api/schema.ts`: TypeScript types generated from the committed OpenAPI snapshot.
 - `src/api/forecast.ts`: thin backend forecast API request helper and runtime payload validation.
 
