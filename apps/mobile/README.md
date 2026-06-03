@@ -31,6 +31,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - Forecast summary cards.
 - Overview decision watch with Outdoor and Operations risk filters.
 - Forecast detail view with timeline steps, model metadata, and signal levels.
+- Timeline chart with metric selection for temperature, wind, rain, and confidence.
 - Risk decision support for outdoor planning and operations workflows.
 - Mock backend API integration.
 - Backend provider status panel.

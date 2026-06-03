@@ -5,6 +5,7 @@ import { colors, spacing } from "../theme";
 import { formatCondition, formatLeadTime } from "../utils/forecastFormat";
 import { ForecastRiskDecisionPanel } from "./ForecastRiskDecisionPanel";
 import { ForecastSignalList } from "./ForecastSignalList";
+import { ForecastTimelineChart } from "./ForecastTimelineChart";
 import { ForecastTimelineDetail } from "./ForecastTimelineDetail";
 
 type ForecastDetailsProps = {
@@ -71,6 +72,12 @@ export function ForecastDetails({
           );
         })}
       </ScrollView>
+
+      <ForecastTimelineChart
+        onSelectLeadHour={onSelectLeadHour}
+        selectedLeadTimeHours={selectedTimelineStep?.lead_time_hours ?? null}
+        timeline={timeline}
+      />
 
       {selectedTimelineStep ? (
         <ForecastTimelineDetail step={selectedTimelineStep} />
