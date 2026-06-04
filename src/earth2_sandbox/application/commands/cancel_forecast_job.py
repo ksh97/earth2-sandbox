@@ -5,6 +5,7 @@ from earth2_sandbox.application.ports.clock import Clock
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.services.forecast_job_view import append_job_event, with_job_links
 from earth2_sandbox.domain.jobs.status import ACTIVE_JOB_STATUSES, TERMINAL_JOB_STATUSES
+from earth2_sandbox.observability.metrics import increment_forecast_job_event
 from earth2_sandbox.schemas.jobs import ForecastJob, ForecastJobDiagnostics
 
 
@@ -36,7 +37,7 @@ class CancelForecastJob:
             occurred_at=now,
         )
         try:
-            return with_job_links(
+            cancelled = with_job_links(
                 await self.store.update_if_status(
                     cancelled,
                     expected_statuses=ACTIVE_JOB_STATUSES,
@@ -46,3 +47,5 @@ class CancelForecastJob:
             raise ForecastJobConflictError(
                 f"Cannot cancel a {error.current_status} forecast job."
             ) from error
+        increment_forecast_job_event("cancelled")
+        return cancelled

@@ -4,6 +4,7 @@ from earth2_sandbox.application.errors import ForecastJobConflictError
 from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.services.forecast_job_view import with_job_links
 from earth2_sandbox.domain.jobs.status import TERMINAL_JOB_STATUSES
+from earth2_sandbox.observability.metrics import increment_forecast_job_event
 from earth2_sandbox.schemas.jobs import ForecastJob
 
 
@@ -22,4 +23,6 @@ class RetryForecastJob:
             parent_job_id=source.id,
             attempt=source.attempt + 1,
         )
-        return with_job_links(retry)
+        retry = with_job_links(retry)
+        increment_forecast_job_event("retry_accepted")
+        return retry

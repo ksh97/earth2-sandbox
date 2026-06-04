@@ -43,6 +43,38 @@ def test_request_id_header_preserves_client_value() -> None:
     assert response.headers["x-request-id"] == "contract-request-id"
 
 
+def test_metrics_endpoint_contract() -> None:
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert "# HELP earth2_http_requests_total" in body
+    assert "# TYPE earth2_http_requests_total counter" in body
+    assert "# HELP earth2_http_request_duration_seconds" in body
+    assert "# TYPE earth2_http_request_duration_seconds summary" in body
+    assert "# HELP earth2_forecast_jobs_total" in body
+    assert "# TYPE earth2_forecast_jobs_total counter" in body
+
+
+def test_http_metrics_increment_for_health() -> None:
+    before = _metric_value(
+        client.get("/metrics").text,
+        "earth2_http_requests_total",
+        {"method": "GET", "path": "/health", "status_code": "200"},
+    )
+
+    response = client.get("/health")
+    after = _metric_value(
+        client.get("/metrics").text,
+        "earth2_http_requests_total",
+        {"method": "GET", "path": "/health", "status_code": "200"},
+    )
+
+    assert response.status_code == 200
+    assert after >= before + 1
+
+
 def test_index_contract() -> None:
     response = client.get("/")
 
@@ -137,6 +169,37 @@ def test_forecast_job_create_logs_request_correlation(caplog) -> None:
     assert accepted["status"] == "queued"
     assert accepted["latitude"] == 37.5665
     assert accepted["longitude"] == 126.9780
+
+
+def test_forecast_job_metrics_increment() -> None:
+    before = client.get("/metrics").text
+    before_accepted = _metric_value(
+        before,
+        "earth2_forecast_jobs_total",
+        {"event": "accepted"},
+    )
+    before_succeeded = _metric_value(
+        before,
+        "earth2_forecast_jobs_total",
+        {"event": "succeeded"},
+    )
+
+    response = client.post(
+        "/api/v1/forecast/jobs",
+        json={"latitude": 37.5665, "longitude": 126.9780},
+    )
+    client.get(response.json()["links"]["self"])
+    after = client.get("/metrics").text
+
+    assert response.status_code == 202
+    assert (
+        _metric_value(after, "earth2_forecast_jobs_total", {"event": "accepted"})
+        >= before_accepted + 1
+    )
+    assert (
+        _metric_value(after, "earth2_forecast_jobs_total", {"event": "succeeded"})
+        >= before_succeeded + 1
+    )
 
 
 def test_forecast_job_poll_contract() -> None:
@@ -308,3 +371,18 @@ def test_point_forecast_rejects_invalid_location() -> None:
     )
 
     assert response.status_code == 422
+
+
+def _metric_value(text: str, name: str, labels: dict[str, str]) -> float:
+    sample_prefix = _metric_sample_prefix(name, labels)
+    for line in text.splitlines():
+        if line.startswith(f"{sample_prefix} "):
+            return float(line.rsplit(" ", maxsplit=1)[1])
+    return 0.0
+
+
+def _metric_sample_prefix(name: str, labels: dict[str, str]) -> str:
+    label_text = ",".join(
+        f'{key}="{value}"' for key, value in sorted(labels.items())
+    )
+    return f"{name}{{{label_text}}}" if label_text else name
