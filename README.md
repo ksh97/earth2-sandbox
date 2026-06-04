@@ -54,6 +54,7 @@ earth2-sandbox/
 │     ├─ api/
 │     │  └─ http/
 │     │     ├─ middleware/
+│     │     ├─ routers/
 │     │     └─ v1/routers/
 │     ├─ application/
 │     │  ├─ commands/
@@ -145,6 +146,8 @@ EARTH2_FORECAST_JOB_RETENTION_HOURS=168
 ## 관측성
 
 모든 API 응답은 `X-Request-ID` 헤더를 포함합니다. 클라이언트가 같은 헤더를 보내면 그대로 보존하고, 없으면 백엔드가 새 값을 생성합니다. Forecast job 생성, 실행 시작, 성공, 실패, 재시도, 취소 지점은 JSON 한 줄 로그로 남으며 가능한 경우 `request_id`, `job_id`, provider diagnostics, `nvcf_request_id`, cache 상태를 함께 기록합니다. 이 값은 앱의 실패 원인 카드와 운영 로그를 연결하기 위한 hardening 기반이며, API response body 계약은 변경하지 않습니다.
+
+`GET /metrics`는 Prometheus text 형식의 process-local metrics를 반환합니다. 현재는 HTTP request count/duration과 forecast job lifecycle event counter를 제공하며, deployable monolith 단계에서 Prometheus, Grafana, cloud monitoring adapter로 연결할 수 있는 최소 운영 신호입니다.
 
 ## 프론트엔드/UI 개발 계약
 
