@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: earth2-sandbox-backend:local
+    env_file:
+      - .env
+    environment:
+      EARTH2_ENVIRONMENT: docker
+      EARTH2_FORECAST_JOB_STORE_BACKEND: ${EARTH2_FORECAST_JOB_STORE_BACKEND:-file}
+      EARTH2_FORECAST_JOB_STORE_DIR: /app/data/jobs
+      EARTH2_FOURCASTNET_CACHE_DIR: /app/data/cache/fourcastnet
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/jobs:/app/data/jobs
+      - ./data/cache/fourcastnet:/app/data/cache/fourcastnet
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
