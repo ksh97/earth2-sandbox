@@ -164,6 +164,20 @@ EARTH2_FORECAST_JOB_RETENTION_HOURS=168
 
 `GET /metrics`는 Prometheus text 형식의 process-local metrics를 반환합니다. 현재는 HTTP request count/duration과 forecast job lifecycle event counter를 제공하며, deployable monolith 단계에서 Prometheus, Grafana, cloud monitoring adapter로 연결할 수 있는 최소 운영 신호입니다.
 
+## API 보호
+
+로컬 prototype 개발에서는 API guard와 rate limit이 기본적으로 꺼져 있습니다. 공개 배포나 hosted FourCastNet 실험처럼 비용/쿼터 관리가 필요한 환경에서는 `.env`에서 다음 값을 켜고 모바일/클라이언트 요청에 `X-API-Key` 헤더를 붙입니다.
+
+```powershell
+EARTH2_API_KEY_REQUIRED=true
+EARTH2_API_KEY=replace-with-a-local-secret
+EARTH2_RATE_LIMIT_ENABLED=true
+EARTH2_RATE_LIMIT_CAPACITY=60
+EARTH2_RATE_LIMIT_WINDOW_SECONDS=60
+```
+
+`/health`, `/metrics`, `/docs`, `/openapi.json`은 운영 상태 확인과 문서 접근을 위해 API key 없이 열어 둡니다. Rate limit은 기본적으로 점 예보, sample 예보, queued job 생성, hosted inference처럼 비용이 큰 forecast endpoint에만 적용됩니다. 현재 구현은 process-local in-memory guard이므로, 여러 backend replica를 운영하기 전에는 Redis 같은 외부 limiter로 옮길 수 있는 hardening backlog로 관리합니다.
+
 ## 프론트엔드/UI 개발 계약
 
 프론트엔드 개발은 이제 mock provider와 queued forecast job 계약을 기준으로 진행할 수 있습니다. 모바일 앱은 `POST /api/v1/forecast/jobs`로 예보 job을 만들고, `GET /api/v1/forecast/jobs/{job_id}/poll`로 `queued`, `running`, `succeeded`, `failed`, `cancelled` 흐름을 가볍게 표시한 뒤, terminal 상태에서 `GET /api/v1/forecast/jobs/{job_id}`로 forecast payload, diagnostics, event history를 가져옵니다.
