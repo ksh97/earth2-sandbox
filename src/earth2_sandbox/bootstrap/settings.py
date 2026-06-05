@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     forecast_job_store_dir: str = "./data/jobs"
     forecast_job_retention_hours: int = 168
     forecast_job_stale_timeout_seconds: int = 1800
+    api_key_required: bool = False
+    api_key: SecretStr | None = Field(default=None)
+    api_keys: SecretStr | None = Field(default=None)
+    rate_limit_enabled: bool = False
+    rate_limit_capacity: int = Field(default=60, ge=1)
+    rate_limit_window_seconds: int = Field(default=60, ge=1)
+    rate_limit_routes: str = (
+        "GET /api/v1/forecast/point,"
+        "GET /api/v1/forecast/sample,"
+        "POST /api/v1/forecast/jobs,"
+        "POST /api/v1/forecast/fourcastnet/hosted/infer"
+    )
 
 
 @lru_cache

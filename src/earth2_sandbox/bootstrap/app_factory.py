@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from earth2_sandbox.api.http.middleware.metrics import MetricsMiddleware
 from earth2_sandbox.api.http.middleware.request_correlation import RequestCorrelationMiddleware
+from earth2_sandbox.api.http.middleware.security import ApiAccessControlMiddleware
 from earth2_sandbox.api.http.routers.metrics import create_metrics_router
 from earth2_sandbox.api.http.v1.routers.forecast_jobs import create_forecast_jobs_router
 from earth2_sandbox.api.http.v1.routers.forecast_queries import create_forecast_queries_router
@@ -61,6 +62,7 @@ def create_app_from_container(container: ApplicationContainer) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(ApiAccessControlMiddleware, settings=container.settings)
     app.add_middleware(RequestCorrelationMiddleware)
     app.add_middleware(MetricsMiddleware)
     app.include_router(create_health_router(settings=container.settings))
