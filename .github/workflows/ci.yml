@@ -30,6 +30,9 @@ jobs:
       - name: Run pytest
         run: pytest
 
+      - name: Build backend Docker image
+        run: docker build -t earth2-sandbox-backend:ci .
+
   mobile:
     name: Mobile checks
     runs-on: ubuntu-latest

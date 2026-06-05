@@ -21,6 +21,9 @@ earth2-sandbox/
 ├─ README.md
 ├─ pyproject.toml
 ├─ .env.example
+├─ .dockerignore
+├─ Dockerfile
+├─ docker-compose.yml
 ├─ .github/
 │  ├─ pull_request_template.md
 │  └─ workflows/
@@ -115,6 +118,18 @@ python -m uvicorn earth2_sandbox.main:app --reload
 - queued 예보 job 생성: `POST http://127.0.0.1:8000/api/v1/forecast/jobs`
 - 예전 prototype 호환 예보: http://127.0.0.1:8000/api/v1/forecast/sample?latitude=37.5665&longitude=126.9780
 - Swagger 문서: http://127.0.0.1:8000/docs
+
+## Docker로 백엔드 실행
+
+Docker baseline은 현재 FastAPI 모듈러 모놀리스를 그대로 포장합니다. Redis/PostgreSQL/별도 worker로 교체하는 단계가 아니라, 로컬과 CI에서 같은 backend image를 만들 수 있는 Phase B 출발점입니다.
+
+```powershell
+Copy-Item .env.example .env
+docker compose build backend
+docker compose up backend
+```
+
+기본 compose 설정은 `EARTH2_FORECAST_JOB_STORE_BACKEND=file`을 사용하고, job 상태와 FourCastNet cache를 각각 `./data/jobs`, `./data/cache/fourcastnet`에 mount합니다. 실제 NVIDIA hosted API를 실험할 때도 API key는 `.env`에만 넣고 GitHub에는 올리지 않습니다. 컨테이너가 올라오면 `http://127.0.0.1:8000/health`와 `http://127.0.0.1:8000/metrics`로 상태와 process-local metrics를 확인할 수 있습니다.
 
 Hosted NVIDIA API 실험을 할 때는 `.env`에서 다음 값을 설정한 뒤 서버를 재시작합니다.
 
