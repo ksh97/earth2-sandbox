@@ -70,6 +70,10 @@ const fallbackBaseUrl = Platform.select({
 export const forecastApiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? fallbackBaseUrl ?? "http://127.0.0.1:8000";
 
+const forecastApiKey = process.env.EXPO_PUBLIC_API_KEY?.trim() ?? "";
+
+export const isForecastApiKeyConfigured = forecastApiKey.length > 0;
+
 export async function fetchPointForecast({
   latitude,
   longitude,
@@ -77,7 +81,9 @@ export async function fetchPointForecast({
   const query = `latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(
     String(longitude),
   )}`;
-  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/point?${query}`);
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/point?${query}`, {
+    headers: buildApiHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast API"));
@@ -87,7 +93,9 @@ export async function fetchPointForecast({
 }
 
 export async function fetchForecastProviderStatus(): Promise<ForecastProviderStatus> {
-  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/provider/status`);
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/provider/status`, {
+    headers: buildApiHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Provider status API"));
@@ -99,9 +107,9 @@ export async function fetchForecastProviderStatus(): Promise<ForecastProviderSta
 export async function createForecastJob(request: ForecastRequest): Promise<ForecastJob> {
   const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/jobs`, {
     body: JSON.stringify(request),
-    headers: {
+    headers: buildApiHeaders({
       "content-type": "application/json",
-    },
+    }),
     method: "POST",
   });
 
@@ -120,7 +128,9 @@ export async function listForecastJobs({
   if (status) {
     searchParams.set("status", status);
   }
-  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/jobs?${searchParams}`);
+  const response = await fetch(`${forecastApiBaseUrl}/api/v1/forecast/jobs?${searchParams}`, {
+    headers: buildApiHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast job history API"));
@@ -130,7 +140,9 @@ export async function listForecastJobs({
 }
 
 export async function fetchForecastJob(pathOrUrl: string): Promise<ForecastJob> {
-  const response = await fetch(buildApiUrl(pathOrUrl));
+  const response = await fetch(buildApiUrl(pathOrUrl), {
+    headers: buildApiHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast job API"));
@@ -141,6 +153,7 @@ export async function fetchForecastJob(pathOrUrl: string): Promise<ForecastJob> 
 
 export async function cancelForecastJob(pathOrUrl: string): Promise<ForecastJob> {
   const response = await fetch(buildApiUrl(pathOrUrl), {
+    headers: buildApiHeaders(),
     method: "POST",
   });
 
@@ -153,6 +166,7 @@ export async function cancelForecastJob(pathOrUrl: string): Promise<ForecastJob>
 
 export async function retryForecastJob(pathOrUrl: string): Promise<ForecastJob> {
   const response = await fetch(buildApiUrl(pathOrUrl), {
+    headers: buildApiHeaders(),
     method: "POST",
   });
 
@@ -164,7 +178,9 @@ export async function retryForecastJob(pathOrUrl: string): Promise<ForecastJob> 
 }
 
 export async function pollForecastJob(pathOrUrl: string): Promise<ForecastJobPollResponse> {
-  const response = await fetch(buildApiUrl(pathOrUrl));
+  const response = await fetch(buildApiUrl(pathOrUrl), {
+    headers: buildApiHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(await formatApiError(response, "Forecast job poll API"));
@@ -179,6 +195,17 @@ function buildApiUrl(pathOrUrl: string) {
   }
 
   return `${forecastApiBaseUrl}${pathOrUrl}`;
+}
+
+function buildApiHeaders(headers: Record<string, string> = {}) {
+  if (!isForecastApiKeyConfigured) {
+    return headers;
+  }
+
+  return {
+    ...headers,
+    "X-API-Key": forecastApiKey,
+  };
 }
 
 async function readJson(response: Response, label: string): Promise<unknown> {

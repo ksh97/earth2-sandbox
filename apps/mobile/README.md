@@ -25,6 +25,8 @@ npm run web
 
 For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iOS Simulator, use `http://127.0.0.1:8000`. For a physical phone, set `EXPO_PUBLIC_API_BASE_URL` to the LAN address of the backend machine.
 
+If the backend runs with `EARTH2_API_KEY_REQUIRED=true`, set `EXPO_PUBLIC_API_KEY` in `apps/mobile/.env`. The app sends it as `X-API-Key` for backend calls and only shows whether a key is configured in the debug screen.
+
 ## Current Scope
 
 - Location input using latitude and longitude.
@@ -37,7 +39,7 @@ For Android Emulator, keep the default API URL as `http://10.0.2.2:8000`. For iO
 - Backend provider status panel.
 - Queued forecast job status panel.
 - Failure diagnostics for hosted FourCastNet job bottlenecks.
-- Settings debug screen for API base URL, provider mode, and latest job diagnostics.
+- Settings debug screen for API base URL, API key configuration, provider mode, and latest job diagnostics.
 - Recent forecast job history with status filters.
 - Retry and cancel controls for forecast job lifecycle testing.
 - Runtime validation for backend forecast and provider status payloads.
