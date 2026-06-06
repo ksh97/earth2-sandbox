@@ -201,6 +201,7 @@ Job dispatch now goes through a `ForecastQueue` application port. The first adap
 in-memory priority queue with idempotency keyed by job id. It is not a durable distributed
 queue, but it gives HTTP handlers, startup recovery, and future worker services the same
 enqueue/dequeue/complete/fail contract before Redis or a dedicated queue service is introduced.
+The durable queue/store migration plan is tracked in `docs/DURABLE_ASYNC.md`.
 
 When the backend starts, the service scans active job files. Existing `queued` jobs
 are scheduled again, and interrupted `running` jobs are moved back to `queued` before
@@ -290,6 +291,7 @@ Model integration stage:
 - Results are cached in object storage.
 - The in-memory job store is replaced with a durable queue/store such as Redis, a database,
   or a dedicated worker service.
+- Durable async migration follows the staged plan in `docs/DURABLE_ASYNC.md`.
 
 Production stage:
 

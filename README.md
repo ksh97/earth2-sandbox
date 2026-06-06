@@ -229,5 +229,6 @@ Android Emulator에서 로컬 백엔드에 접속할 때는 `http://10.0.2.2:800
 
 ## 참고 문서
 
+- Durable async queue/store plan: docs/DURABLE_ASYNC.md
 - NVIDIA FourCastNet NIM 문서: https://docs.nvidia.com/nim/earth-2/fourcastnet/latest/
 - NVIDIA Earth-2 Weather Analytics Blueprint: https://github.com/NVIDIA-Omniverse-blueprints/earth2-weather-analytics
