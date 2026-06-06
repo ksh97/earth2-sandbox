@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     fourcastnet_cache_enabled: bool = True
     fourcastnet_cache_dir: str = "./data/cache/fourcastnet"
     forecast_queue_backend: ForecastQueueBackend = "memory"
+    redis_url: str = "redis://localhost:6379/0"
+    forecast_queue_name: str = Field(default="earth2:forecast-jobs", min_length=1)
+    forecast_queue_visibility_timeout_seconds: int = Field(default=300, ge=1)
     forecast_job_store_backend: ForecastJobStoreBackend = "memory"
     forecast_job_store_dir: str = "./data/jobs"
     forecast_job_retention_hours: int = 168

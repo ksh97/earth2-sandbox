@@ -159,15 +159,22 @@ EARTH2_FORECAST_JOB_STORE_BACKEND=memory|file
 to a Redis adapter yet. Setting it should fail clearly until the adapter and
 integration tests exist.
 
+Redis adapter groundwork settings are accepted now, but remain unused while the
+active queue backend is `memory`:
+
+```text
+EARTH2_REDIS_URL=redis://localhost:6379/0
+EARTH2_FORECAST_QUEUE_NAME=earth2:forecast-jobs
+EARTH2_FORECAST_QUEUE_VISIBILITY_TIMEOUT_SECONDS=300
+```
+
 Future values:
 
 ```text
 EARTH2_FORECAST_JOB_STORE_BACKEND=memory|file|postgres
 EARTH2_FORECAST_QUEUE_BACKEND=memory|redis
-EARTH2_DATABASE_URL=postgresql+asyncpg://...
-EARTH2_REDIS_URL=redis://...
-EARTH2_FORECAST_QUEUE_NAME=earth2:forecast-jobs
 EARTH2_FORECAST_WORKER_CONCURRENCY=1
+EARTH2_DATABASE_URL=postgresql+asyncpg://...
 EARTH2_ARTIFACT_STORE_BACKEND=local|s3|gcs|azure
 ```
 
