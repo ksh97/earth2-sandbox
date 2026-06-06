@@ -38,6 +38,7 @@
 - Add authentication and basic abuse protection.
 - Add caching.
 - Add observability and error reporting.
+- Implement the durable async queue/store migration plan in `docs/DURABLE_ASYNC.md`.
 - Add privacy policy and terms links.
 - Prepare App Store and Google Play metadata.
 
