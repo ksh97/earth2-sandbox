@@ -30,12 +30,20 @@ def test_container_selects_memory_queue_by_default() -> None:
     assert isinstance(queue, InMemoryPriorityForecastQueue)
 
 
+def test_settings_include_redis_queue_groundwork_defaults() -> None:
+    settings = Settings(forecast_provider="mock")
+
+    assert settings.redis_url == "redis://localhost:6379/0"
+    assert settings.forecast_queue_name == "earth2:forecast-jobs"
+    assert settings.forecast_queue_visibility_timeout_seconds == 300
+
+
 def test_container_rejects_unimplemented_redis_queue_backend() -> None:
     settings = Settings(forecast_provider="mock", forecast_queue_backend="redis")
 
     with pytest.raises(
         NotImplementedError,
-        match="EARTH2_FORECAST_QUEUE_BACKEND=redis",
+        match="Redis settings are accepted as adapter groundwork",
     ):
         build_forecast_queue(settings)
 

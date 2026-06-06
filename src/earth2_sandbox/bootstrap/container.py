@@ -86,8 +86,9 @@ def build_forecast_queue(settings: Settings) -> ForecastQueue:
     if settings.forecast_queue_backend == "redis":
         msg = (
             "EARTH2_FORECAST_QUEUE_BACKEND=redis is planned for durable async "
-            "dispatch but is not implemented yet. Use memory for the current "
-            "modular monolith."
+            "dispatch but is not implemented yet. Redis settings are accepted "
+            "as adapter groundwork, but use memory for the current modular "
+            "monolith."
         )
         raise NotImplementedError(msg)
 
