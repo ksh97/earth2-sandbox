@@ -151,8 +151,13 @@ Worker health should be observable with:
 Current supported values:
 
 ```text
+EARTH2_FORECAST_QUEUE_BACKEND=memory
 EARTH2_FORECAST_JOB_STORE_BACKEND=memory|file
 ```
+
+`EARTH2_FORECAST_QUEUE_BACKEND=redis` is a planned value, but it is not wired
+to a Redis adapter yet. Setting it should fail clearly until the adapter and
+integration tests exist.
 
 Future values:
 
