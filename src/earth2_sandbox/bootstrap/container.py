@@ -47,7 +47,7 @@ def build_container(
         clock=clock,
         id_generator=id_generator,
     )
-    forecast_queue = InMemoryPriorityForecastQueue()
+    forecast_queue = build_forecast_queue(resolved_settings)
     forecast_job_service = forecast_job_service_override or ForecastJobService(
         provider=forecast_provider,
         store=forecast_job_store,
@@ -80,3 +80,15 @@ def build_forecast_job_store(
         )
 
     return InMemoryForecastJobStore(clock=clock, id_generator=id_generator)
+
+
+def build_forecast_queue(settings: Settings) -> ForecastQueue:
+    if settings.forecast_queue_backend == "redis":
+        msg = (
+            "EARTH2_FORECAST_QUEUE_BACKEND=redis is planned for durable async "
+            "dispatch but is not implemented yet. Use memory for the current "
+            "modular monolith."
+        )
+        raise NotImplementedError(msg)
+
+    return InMemoryPriorityForecastQueue()

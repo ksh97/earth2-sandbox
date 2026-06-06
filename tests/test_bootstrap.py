@@ -1,6 +1,8 @@
+import pytest
+
 from earth2_sandbox.app import create_app
 from earth2_sandbox.bootstrap.app_factory import create_app as bootstrap_create_app
-from earth2_sandbox.bootstrap.container import build_container
+from earth2_sandbox.bootstrap.container import build_container, build_forecast_queue
 from earth2_sandbox.bootstrap.settings import Settings
 from earth2_sandbox.config import Settings as CompatibilitySettings
 from earth2_sandbox.infrastructure.queue import InMemoryPriorityForecastQueue
@@ -20,6 +22,22 @@ def test_container_selects_memory_job_store_by_default() -> None:
 
     assert isinstance(container.forecast_job_store, InMemoryForecastJobStore)
     assert isinstance(container.forecast_queue, InMemoryPriorityForecastQueue)
+
+
+def test_container_selects_memory_queue_by_default() -> None:
+    queue = build_forecast_queue(Settings(forecast_provider="mock"))
+
+    assert isinstance(queue, InMemoryPriorityForecastQueue)
+
+
+def test_container_rejects_unimplemented_redis_queue_backend() -> None:
+    settings = Settings(forecast_provider="mock", forecast_queue_backend="redis")
+
+    with pytest.raises(
+        NotImplementedError,
+        match="EARTH2_FORECAST_QUEUE_BACKEND=redis",
+    ):
+        build_forecast_queue(settings)
 
 
 def test_container_selects_file_job_store(tmp_path) -> None:
