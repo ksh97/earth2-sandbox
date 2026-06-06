@@ -6,6 +6,7 @@ import {
   ForecastJobSummary,
   ForecastProviderStatus,
   forecastApiBaseUrl,
+  isForecastApiKeyConfigured,
 } from "../api/forecast";
 import { colors, spacing } from "../theme";
 
@@ -76,6 +77,7 @@ function buildRuntimeRows({
 }): DebugRow[] {
   return [
     { label: "API base", value: forecastApiBaseUrl },
+    { label: "API key", value: isForecastApiKeyConfigured ? "Configured" : "Not configured" },
     { label: "Provider", value: providerStatus?.provider ?? "Unknown" },
     { label: "Mode", value: providerStatus?.mode ?? "Unknown" },
     { label: "Configured", value: providerStatus?.configured ? "Yes" : "No" },

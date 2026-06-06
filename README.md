@@ -178,6 +178,8 @@ EARTH2_RATE_LIMIT_WINDOW_SECONDS=60
 
 `/health`, `/metrics`, `/docs`, `/openapi.json`은 운영 상태 확인과 문서 접근을 위해 API key 없이 열어 둡니다. Rate limit은 기본적으로 점 예보, sample 예보, queued job 생성, hosted inference처럼 비용이 큰 forecast endpoint에만 적용됩니다. 현재 구현은 process-local in-memory guard이므로, 여러 backend replica를 운영하기 전에는 Redis 같은 외부 limiter로 옮길 수 있는 hardening backlog로 관리합니다.
 
+모바일 prototype에서 이 guard를 사용할 때는 `apps/mobile/.env`에 `EXPO_PUBLIC_API_KEY`를 설정합니다. 앱은 backend 요청에 `X-API-Key`를 붙이고, debug screen에는 실제 key 값이 아니라 configured 여부만 표시합니다.
+
 ## 프론트엔드/UI 개발 계약
 
 프론트엔드 개발은 이제 mock provider와 queued forecast job 계약을 기준으로 진행할 수 있습니다. 모바일 앱은 `POST /api/v1/forecast/jobs`로 예보 job을 만들고, `GET /api/v1/forecast/jobs/{job_id}/poll`로 `queued`, `running`, `succeeded`, `failed`, `cancelled` 흐름을 가볍게 표시한 뒤, terminal 상태에서 `GET /api/v1/forecast/jobs/{job_id}`로 forecast payload, diagnostics, event history를 가져옵니다.
