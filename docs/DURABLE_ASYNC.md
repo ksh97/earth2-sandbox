@@ -197,6 +197,8 @@ they remain design targets and should not be required by local development.
 The durable async implementation is not ready until all of these are true:
 
 - OpenAPI snapshot remains stable unless an intentional contract change is made.
+- Each queue adapter passes the shared `ForecastQueue` contract tests before it
+  is selectable in production settings.
 - Mobile generated API types still pass typecheck.
 - `queued`, `running`, `succeeded`, `failed`, and `cancelled` semantics remain
   compatible with the existing prototype.
