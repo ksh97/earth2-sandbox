@@ -9,6 +9,7 @@ from earth2_sandbox.infrastructure.queue.asyncio_worker import (
 from earth2_sandbox.infrastructure.queue.in_memory_priority_queue import (
     InMemoryPriorityForecastQueue,
 )
+from earth2_sandbox.infrastructure.queue.redis_queue import RedisForecastQueue
 
 __all__ = [
     "AsyncioTaskForecastJobWorker",
@@ -16,4 +17,5 @@ __all__ = [
     "InMemoryPriorityForecastQueue",
     "QueuedAsyncioTaskForecastJobWorker",
     "QueuedDeferredForecastJobWorker",
+    "RedisForecastQueue",
 ]
