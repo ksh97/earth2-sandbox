@@ -10,6 +10,16 @@ jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Check out repository
@@ -28,6 +38,8 @@ jobs:
         run: ruff check .
 
       - name: Run pytest
+        env:
+          EARTH2_REDIS_TEST_URL: redis://localhost:6379/15
         run: pytest
 
       - name: Build backend Docker image

@@ -8,7 +8,7 @@ from earth2_sandbox.application.ports.forecast_job_store import ForecastJobStore
 from earth2_sandbox.application.ports.forecast_queue import ForecastQueue
 from earth2_sandbox.application.ports.id_generator import IdGenerator
 from earth2_sandbox.bootstrap.settings import Settings, get_settings
-from earth2_sandbox.infrastructure.queue import InMemoryPriorityForecastQueue
+from earth2_sandbox.infrastructure.queue import InMemoryPriorityForecastQueue, RedisForecastQueue
 from earth2_sandbox.infrastructure.runtime import SystemClock, UuidIdGenerator
 from earth2_sandbox.infrastructure.storage import FileForecastJobStore, InMemoryForecastJobStore
 from earth2_sandbox.providers import ForecastProvider, build_forecast_provider
@@ -84,12 +84,10 @@ def build_forecast_job_store(
 
 def build_forecast_queue(settings: Settings) -> ForecastQueue:
     if settings.forecast_queue_backend == "redis":
-        msg = (
-            "EARTH2_FORECAST_QUEUE_BACKEND=redis is planned for durable async "
-            "dispatch but is not implemented yet. Redis settings are accepted "
-            "as adapter groundwork, but use memory for the current modular "
-            "monolith."
+        return RedisForecastQueue(
+            redis_url=settings.redis_url,
+            queue_name=settings.forecast_queue_name,
+            visibility_timeout_seconds=settings.forecast_queue_visibility_timeout_seconds,
         )
-        raise NotImplementedError(msg)
 
     return InMemoryPriorityForecastQueue()

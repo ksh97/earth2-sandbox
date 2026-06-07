@@ -151,16 +151,15 @@ Worker health should be observable with:
 Current supported values:
 
 ```text
-EARTH2_FORECAST_QUEUE_BACKEND=memory
+EARTH2_FORECAST_QUEUE_BACKEND=memory|redis
 EARTH2_FORECAST_JOB_STORE_BACKEND=memory|file
 ```
 
-`EARTH2_FORECAST_QUEUE_BACKEND=redis` is a planned value, but it is not wired
-to a Redis adapter yet. Setting it should fail clearly until the adapter and
-integration tests exist.
+`memory` remains the local default. `redis` is selectable when a Redis server is
+available, but it is still a queue-only hardening step; PostgreSQL job storage
+and a separate worker process are not enabled yet.
 
-Redis adapter groundwork settings are accepted now, but remain unused while the
-active queue backend is `memory`:
+Redis adapter settings:
 
 ```text
 EARTH2_REDIS_URL=redis://localhost:6379/0
@@ -188,7 +187,7 @@ they remain design targets and should not be required by local development.
    step.
 3. Add a queue backend setting while keeping `memory` as the default.
 4. Add Redis queue adapter contract tests using a real Redis service in CI or a
-   narrowly scoped integration test job.
+   narrowly scoped integration test job. This is now in place.
 5. Add PostgreSQL job store adapter and migrations while keeping `file` useful
    for local hosted-provider diagnostics.
 6. Add `forecast-worker` entrypoint and docker-compose worker service.
