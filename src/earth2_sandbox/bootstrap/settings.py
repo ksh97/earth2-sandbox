@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ForecastProviderName = Literal["mock", "fourcastnet"]
 FourCastNetEndpointMode = Literal["self_hosted", "hosted"]
-ForecastJobStoreBackend = Literal["memory", "file"]
+ForecastJobStoreBackend = Literal["memory", "file", "postgres"]
 ForecastQueueBackend = Literal["memory", "redis"]
 
 
@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     forecast_queue_name: str = Field(default="earth2:forecast-jobs", min_length=1)
     forecast_queue_visibility_timeout_seconds: int = Field(default=300, ge=1)
     forecast_job_store_backend: ForecastJobStoreBackend = "memory"
+    database_url: SecretStr | None = Field(default=None)
     forecast_job_store_dir: str = "./data/jobs"
     forecast_job_retention_hours: int = 168
     forecast_job_stale_timeout_seconds: int = 1800

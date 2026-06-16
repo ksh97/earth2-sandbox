@@ -167,13 +167,21 @@ EARTH2_FORECAST_QUEUE_NAME=earth2:forecast-jobs
 EARTH2_FORECAST_QUEUE_VISIBILITY_TIMEOUT_SECONDS=300
 ```
 
+PostgreSQL job store groundwork settings are accepted now, but the active job
+store backend must remain `memory` or `file` until the adapter and migrations
+land:
+
+```text
+EARTH2_FORECAST_JOB_STORE_BACKEND=postgres
+EARTH2_DATABASE_URL=postgresql+asyncpg://earth2:earth2@localhost:5432/earth2
+```
+
 Future values:
 
 ```text
 EARTH2_FORECAST_JOB_STORE_BACKEND=memory|file|postgres
 EARTH2_FORECAST_QUEUE_BACKEND=memory|redis
 EARTH2_FORECAST_WORKER_CONCURRENCY=1
-EARTH2_DATABASE_URL=postgresql+asyncpg://...
 EARTH2_ARTIFACT_STORE_BACKEND=local|s3|gcs|azure
 ```
 
@@ -205,6 +213,9 @@ The durable async implementation is not ready until all of these are true:
 - OpenAPI snapshot remains stable unless an intentional contract change is made.
 - Each queue adapter passes the shared `ForecastQueue` contract tests before it
   is selectable in production settings.
+- The PostgreSQL job store passes the existing `ForecastJobStore` behavior
+  tests and preserves job events, diagnostics, retry lineage, and cleanup
+  semantics before it is selectable in production settings.
 - Mobile generated API types still pass typecheck.
 - `queued`, `running`, `succeeded`, `failed`, and `cancelled` semantics remain
   compatible with the existing prototype.
