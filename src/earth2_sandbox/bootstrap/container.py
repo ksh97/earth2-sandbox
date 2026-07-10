@@ -78,6 +78,14 @@ def build_forecast_job_store(
             clock=clock,
             id_generator=id_generator,
         )
+    if settings.forecast_job_store_backend == "postgres":
+        msg = (
+            "EARTH2_FORECAST_JOB_STORE_BACKEND=postgres is planned for durable "
+            "job state but is not implemented yet. PostgreSQL settings are "
+            "accepted as adapter groundwork, but use memory or file for the "
+            "current modular monolith."
+        )
+        raise NotImplementedError(msg)
 
     return InMemoryForecastJobStore(clock=clock, id_generator=id_generator)
 
