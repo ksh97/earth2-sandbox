@@ -1,6 +1,12 @@
+import pytest
+
 from earth2_sandbox.app import create_app
 from earth2_sandbox.bootstrap.app_factory import create_app as bootstrap_create_app
-from earth2_sandbox.bootstrap.container import build_container, build_forecast_queue
+from earth2_sandbox.bootstrap.container import (
+    build_container,
+    build_forecast_job_store,
+    build_forecast_queue,
+)
 from earth2_sandbox.bootstrap.settings import Settings
 from earth2_sandbox.config import Settings as CompatibilitySettings
 from earth2_sandbox.infrastructure.queue import (
@@ -39,6 +45,18 @@ def test_settings_include_redis_queue_groundwork_defaults() -> None:
     assert settings.forecast_queue_visibility_timeout_seconds == 300
 
 
+def test_settings_accept_postgres_job_store_groundwork() -> None:
+    settings = Settings(
+        forecast_provider="mock",
+        forecast_job_store_backend="postgres",
+        database_url="postgresql+asyncpg://earth2:earth2@localhost:5432/earth2",
+    )
+
+    assert settings.forecast_job_store_backend == "postgres"
+    assert settings.database_url is not None
+    assert settings.database_url.get_secret_value().startswith("postgresql+asyncpg://")
+
+
 def test_container_selects_redis_queue_backend() -> None:
     settings = Settings(forecast_provider="mock", forecast_queue_backend="redis")
 
@@ -57,3 +75,17 @@ def test_container_selects_file_job_store(tmp_path) -> None:
     )
 
     assert isinstance(container.forecast_job_store, FileForecastJobStore)
+
+
+def test_container_rejects_unimplemented_postgres_job_store_backend() -> None:
+    settings = Settings(
+        forecast_provider="mock",
+        forecast_job_store_backend="postgres",
+        database_url="postgresql+asyncpg://earth2:earth2@localhost:5432/earth2",
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="PostgreSQL settings are accepted as adapter groundwork",
+    ):
+        build_forecast_job_store(settings)
